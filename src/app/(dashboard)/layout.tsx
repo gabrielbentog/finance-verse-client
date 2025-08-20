@@ -15,7 +15,7 @@ export default function DashboardLayout({
         component="main"
         sx={{
           flexGrow: 1,
-          width: { sm: `calc(100% - 240px)` },
+          width: { sm: `calc(100% - 280px)` },
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
