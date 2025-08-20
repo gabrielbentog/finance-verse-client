@@ -59,11 +59,14 @@ export default function DespesasPage() {
       field: 'date', 
       headerName: 'Data', 
       width: 120,
-      renderCell: (params) => {
-        const date = params.row?.date;
-        if (!date) return '-';
-        const [year, month, day] = String(date).split('-');
-        return `${day}/${month}/${year}`;
+      valueGetter: (params) => params.row?.date,
+      valueFormatter: ({ value }) => {
+        if (!value) return '-';
+        try {
+          return new Date(value).toLocaleDateString('pt-BR');
+        } catch {
+          return '-';
+        }
       }
     },
     { 
@@ -81,13 +84,12 @@ export default function DespesasPage() {
       field: 'value',
       headerName: 'Valor',
       width: 150,
-      type: 'number',
-      renderCell: (params) => {
-        if (typeof params.value !== 'number') return '-';
+      valueFormatter: ({ value }) => {
+        if (typeof value !== 'number') return '-';
         return new Intl.NumberFormat('pt-BR', {
           style: 'currency',
           currency: 'BRL'
-        }).format(params.value);
+        }).format(Math.abs(value));
       }
     },
   ];
@@ -182,41 +184,42 @@ export default function DespesasPage() {
             }}
           >
             <DataGrid
-            rows={despesas}
-            columns={columns}
-            getRowId={(row) => row.id}
-            disableRowSelectionOnClick
-            autoHeight
-            initialState={{
-              pagination: { paginationModel: { pageSize: 10 } },
-              sorting: {
-                sortModel: [{ field: 'date', sort: 'desc' }],
-              },
-            }}
-            pageSizeOptions={[5, 10, 25]}
-            sx={{
-              border: 'none',
-              flex: 1,
-              '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: 'background.paper',
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-              },
-              '& .MuiDataGrid-footerContainer': {
-                position: 'sticky',
-                bottom: 0,
-                backgroundColor: 'background.paper',
-                borderTop: '1px solid',
-                borderColor: 'divider',
-              },
-            }}
-          />
-        </Paper>
-      </Stack>
+              rows={despesas}
+              columns={columns}
+              getRowId={(row) => row.id}
+              disableRowSelectionOnClick
+              autoHeight
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10 } },
+                sorting: {
+                  sortModel: [{ field: 'date', sort: 'desc' }],
+                },
+              }}
+              pageSizeOptions={[5, 10, 25]}
+              sx={{
+                border: 'none',
+                flex: 1,
+                '& .MuiDataGrid-columnHeaders': {
+                  backgroundColor: 'background.paper',
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-cell': {
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  position: 'sticky',
+                  bottom: 0,
+                  backgroundColor: 'background.paper',
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                },
+              }}
+            />
+          </Paper>
+        </Stack>
+      </Container>
 
       <Dialog 
         open={isDialogOpen} 
@@ -350,7 +353,6 @@ export default function DespesasPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
     </Box>
   );
 }

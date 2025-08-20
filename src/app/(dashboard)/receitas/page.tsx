@@ -176,9 +176,12 @@ const ReceitasPage: React.FC = () => {
           <Paper 
             elevation={0}
             sx={{ 
+              display: 'flex',
+              flexDirection: 'column',
               height: 'calc(100vh - 300px)', 
               borderRadius: 3,
               overflow: 'hidden',
+              position: 'relative'
             }}
           >
             <DataGrid
@@ -196,6 +199,7 @@ const ReceitasPage: React.FC = () => {
               pageSizeOptions={[5, 10, 25]}
               sx={{
                 border: 'none',
+                flex: 1,
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'background.paper',
                   borderBottom: '1px solid',
@@ -203,6 +207,13 @@ const ReceitasPage: React.FC = () => {
                 },
                 '& .MuiDataGrid-cell': {
                   borderBottom: '1px solid',
+                  borderColor: 'divider',
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  position: 'sticky',
+                  bottom: 0,
+                  backgroundColor: 'background.paper',
+                  borderTop: '1px solid',
                   borderColor: 'divider',
                 },
               }}
