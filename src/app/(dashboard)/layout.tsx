@@ -9,19 +9,23 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f5f7fb' }}>
       <NavBar />
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
           width: { sm: `calc(100% - 240px)` },
-          ml: { sm: '240px' },
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          p: 0,
         }}
       >
         <Toolbar />
-        {children}
+        <Box sx={{ flex: 1, height: '100%' }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

@@ -34,7 +34,7 @@ export default function DespesasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { transactions, addTransaction } = useFinanceStore();
   
-  const despesas = transactions.filter(t => t.type === 'despesa');
+  const despesas = transactions.filter(t => t.type === 'EXPENSE');
   const totalDespesas = despesas.reduce((acc, curr) => acc + curr.value, 0);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<TransactionFormData>({
@@ -44,7 +44,7 @@ export default function DespesasPage() {
   const onSubmit = (data: TransactionFormData) => {
     addTransaction({
       ...data,
-      type: 'despesa',
+      type: 'EXPENSE',
     });
     setIsDialogOpen(false);
     reset();

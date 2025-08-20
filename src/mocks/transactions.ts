@@ -4,7 +4,7 @@ export const mockTransactions: Transaction[] = [
   {
     id: '1',
     type: 'INCOME',
-    amount: 5000,
+    amount: 1000,
     category: 'Salário',
     description: 'Salário mensal',
     date: '2025-08-05',

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 interface Transaction {
   id: string;
-  type: 'receita' | 'despesa';
+  type: 'INCOME' | 'EXPENSE';
   value: number;
   category: string;
   description: string;
@@ -19,15 +19,15 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
   transactions: [
     {
       id: '1',
-      type: 'receita',
-      value: 5000,
+      type: 'INCOME',
+      value: 1000,
       category: 'Salário',
       description: 'Salário mensal',
       date: '2025-08-05',
     },
     {
       id: '2',
-      type: 'despesa',
+      type: 'EXPENSE',
       value: 1000,
       category: 'Alimentação',
       description: 'Compras do mês',
@@ -35,7 +35,7 @@ export const useFinanceStore = create<FinanceStore>((set) => ({
     },
     {
       id: '3',
-      type: 'despesa',
+      type: 'EXPENSE',
       value: 800,
       category: 'Transporte',
       description: 'Combustível',
