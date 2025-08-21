@@ -8,7 +8,6 @@ import {
   Container,
   TextField,
   Typography,
-  Paper,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -41,90 +40,180 @@ export default function RegisterPage() {
       // Em produção, isso seria uma chamada API real
       console.log('Usuário registrado:', data);
       router.push('/login');
-    } catch (error) {
+    } catch (err) {
       setError('Erro ao realizar cadastro');
+      console.error('Erro:', err);
     }
   };
 
   return (
-    <Container component="main" maxWidth="xs">
-      <Box
-        sx={{
-          mt: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
-          <Typography component="h1" variant="h5" align="center" gutterBottom>
-            Cadastro
-          </Typography>
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1 }}>
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              label="Nome"
-              autoFocus
-              {...register('name')}
-              error={!!errors.name}
-              helperText={errors.name?.message}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              label="Email"
-              autoComplete="email"
-              {...register('email')}
-              error={!!errors.email}
-              helperText={errors.email?.message}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              label="Senha"
-              type="password"
-              {...register('password')}
-              error={!!errors.password}
-              helperText={errors.password?.message}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              label="Confirmar Senha"
-              type="password"
-              {...register('confirmPassword')}
-              error={!!errors.confirmPassword}
-              helperText={errors.confirmPassword?.message}
-            />
-            {error && (
-              <Typography color="error" align="center" sx={{ mt: 2 }}>
-                {error}
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}
+    >
+      <Container maxWidth="sm" sx={{ my: 'auto' }}>
+        <Box
+          sx={{
+            position: 'relative',
+            borderRadius: 4,
+            overflow: 'hidden',
+            bgcolor: 'background.paper',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '4px',
+              background: 'linear-gradient(90deg, #667eea, #764ba2)',
+            },
+          }}
+        >
+          <Box sx={{ p: { xs: 3, sm: 6 } }}>
+            <Box sx={{ mb: 5, textAlign: 'center' }}>
+              <Typography
+                component="h1"
+                sx={{
+                  fontSize: '2rem',
+                  fontWeight: 700,
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  mb: 2,
+                }}
+              >
+                Finance Verse
               </Typography>
-            )}
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3, mb: 2 }}
-            >
-              Cadastrar
-            </Button>
-            <Button
-              component={Link}
-              href="/login"
-              fullWidth
-              variant="text"
-            >
-              Já tem uma conta? Faça login
-            </Button>
+              <Typography variant="body1" color="text.secondary">
+                Crie sua conta e comece a gerenciar suas finanças
+              </Typography>
+            </Box>
+
+            <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Nome"
+                autoFocus
+                {...register('name')}
+                error={!!errors.name}
+                helperText={errors.name?.message}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Email"
+                autoComplete="email"
+                {...register('email')}
+                error={!!errors.email}
+                helperText={errors.email?.message}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Senha"
+                type="password"
+                {...register('password')}
+                error={!!errors.password}
+                helperText={errors.password?.message}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Confirmar Senha"
+                type="password"
+                {...register('confirmPassword')}
+                error={!!errors.confirmPassword}
+                helperText={errors.confirmPassword?.message}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+              
+              {error && (
+                <Typography 
+                  color="error" 
+                  align="center" 
+                  sx={{ 
+                    mt: 2,
+                    bgcolor: 'error.main',
+                    color: 'error.contrastText',
+                    py: 1,
+                    px: 2,
+                    borderRadius: 1,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  {error}
+                </Typography>
+              )}
+
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                sx={{
+                  mt: 4,
+                  mb: 2,
+                  py: 1.5,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  '&:hover': {
+                    background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                  },
+                }}
+              >
+                Cadastrar
+              </Button>
+
+              <Button
+                component={Link}
+                href="/login"
+                fullWidth
+                variant="text"
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.95rem',
+                  color: 'text.secondary',
+                  '&:hover': {
+                    background: 'transparent',
+                    color: '#667eea',
+                  },
+                }}
+              >
+                Já tem uma conta? <Box component="span" sx={{ color: '#667eea', ml: 0.5 }}>Faça login</Box>
+              </Button>
+            </Box>
           </Box>
-        </Paper>
-      </Box>
-    </Container>
+        </Box>
+      </Container>
+    </Box>
   );
 }
