@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Box,
   Button,
   Container,
   TextField,
   Typography,
+  CircularProgress,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/auth';
 
 const registerSchema = z.object({
   name: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres'),
@@ -27,22 +28,32 @@ const registerSchema = z.object({
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { register: registerUser } = useAuth();
   
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   });
 
   const onSubmit = async (data: RegisterFormData) => {
+    setIsSubmitting(true);
+    setError('');
+
     try {
-      // Simula registro bem-sucedido
-      // Em produção, isso seria uma chamada API real
-      console.log('Usuário registrado:', data);
-      router.push('/login');
+      // O context de autenticação agora já redireciona para o dashboard
+      await registerUser(data.name, data.email, data.password);
+      // Não precisamos mais redirecionar aqui, pois o contexto já faz isso
     } catch (err) {
-      setError('Erro ao realizar cadastro');
-      console.error('Erro:', err);
+      console.error('Erro ao criar conta:', err);
+      
+      if (typeof err === 'object' && err !== null && 'error' in err) {
+        setError((err as { error: string }).error);
+      } else {
+        setError('Erro ao criar conta. Tente novamente mais tarde.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -100,6 +111,7 @@ export default function RegisterPage() {
                 fullWidth
                 label="Nome"
                 autoFocus
+                disabled={isSubmitting}
                 {...register('name')}
                 error={!!errors.name}
                 helperText={errors.name?.message}
@@ -115,6 +127,7 @@ export default function RegisterPage() {
                 fullWidth
                 label="Email"
                 autoComplete="email"
+                disabled={isSubmitting}
                 {...register('email')}
                 error={!!errors.email}
                 helperText={errors.email?.message}
@@ -130,6 +143,7 @@ export default function RegisterPage() {
                 fullWidth
                 label="Senha"
                 type="password"
+                disabled={isSubmitting}
                 {...register('password')}
                 error={!!errors.password}
                 helperText={errors.password?.message}
@@ -145,6 +159,7 @@ export default function RegisterPage() {
                 fullWidth
                 label="Confirmar Senha"
                 type="password"
+                disabled={isSubmitting}
                 {...register('confirmPassword')}
                 error={!!errors.confirmPassword}
                 helperText={errors.confirmPassword?.message}
@@ -177,6 +192,7 @@ export default function RegisterPage() {
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={isSubmitting}
                 sx={{
                   mt: 4,
                   mb: 2,
@@ -190,7 +206,9 @@ export default function RegisterPage() {
                   },
                 }}
               >
-                Cadastrar
+                {isSubmitting ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : 'Cadastrar'}
               </Button>
 
               <Button
@@ -198,6 +216,7 @@ export default function RegisterPage() {
                 href="/login"
                 fullWidth
                 variant="text"
+                disabled={isSubmitting}
                 sx={{
                   textTransform: 'none',
                   fontSize: '0.95rem',

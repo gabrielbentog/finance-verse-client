@@ -1,8 +1,10 @@
+// Mantendo para compatibilidade, mas agora vamos usar principalmente o UserData de auth.ts
 export interface User {
-  id: string;
+  id: string | number;
   name: string;
   email: string;
-  createdAt: string;
+  createdAt?: string;
+  avatar_url?: string | null;
 }
 
 export interface LoginCredentials {

@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Box,
   Button,
   Container,
   TextField,
   Typography,
+  CircularProgress,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/auth';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -22,22 +23,32 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login } = useAuth();
   
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
 
   const onSubmit = async (data: LoginFormData) => {
+    setIsSubmitting(true);
+    setError('');
+    
     try {
-      if (data.email === 'teste@example.com' && data.password === '123456') {
-        router.push('/dashboard');
+      // O context de autenticação agora já redireciona para o dashboard
+      await login(data.email, data.password);
+      // Não precisamos mais redirecionar aqui, pois o contexto já faz isso
+    } catch (err) {
+      console.error('Erro ao fazer login:', err);
+      
+      if (typeof err === 'object' && err !== null && 'error' in err) {
+        setError((err as { error: string }).error);
       } else {
-        setError('Credenciais inválidas');
+        setError('Credenciais inválidas ou servidor indisponível');
       }
-    } catch {
-      setError('Erro ao realizar login');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -96,6 +107,7 @@ export default function LoginPage() {
                 label="Email"
                 autoComplete="email"
                 autoFocus
+                disabled={isSubmitting}
                 {...register('email')}
                 error={!!errors.email}
                 helperText={errors.email?.message}
@@ -112,6 +124,7 @@ export default function LoginPage() {
                 label="Senha"
                 type="password"
                 autoComplete="current-password"
+                disabled={isSubmitting}
                 {...register('password')}
                 error={!!errors.password}
                 helperText={errors.password?.message}
@@ -144,6 +157,7 @@ export default function LoginPage() {
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={isSubmitting}
                 sx={{
                   mt: 4,
                   mb: 2,
@@ -157,7 +171,9 @@ export default function LoginPage() {
                   },
                 }}
               >
-                Entrar
+                {isSubmitting ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : 'Entrar'}
               </Button>
 
               <Button
@@ -165,6 +181,7 @@ export default function LoginPage() {
                 href="/register"
                 fullWidth
                 variant="text"
+                disabled={isSubmitting}
                 sx={{
                   textTransform: 'none',
                   fontSize: '0.95rem',

@@ -31,6 +31,7 @@ import {
 import { useThemeStore } from '@/store/themeStore';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/auth';
 
 const drawerWidth = 280;
 
@@ -38,6 +39,7 @@ export function NavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isDarkMode, toggleTheme } = useThemeStore();
   const pathname = usePathname();
+  const { logout, user } = useAuth();
 
   const menuItems = [
     { text: 'Dashboard', icon: <Dashboard />, href: '/dashboard' },
@@ -166,14 +168,14 @@ export function NavBar() {
                 background: 'linear-gradient(90deg, #667eea, #764ba2)',
               }}
             >
-              U
+              {user?.name?.charAt(0) || 'U'}
             </Avatar>
             <Box sx={{ ml: 1.5 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                Usuário
+                {user?.name || 'Usuário'}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                usuario@email.com
+                {user?.email || 'usuario@email.com'}
               </Typography>
             </Box>
           </Box>
@@ -186,7 +188,7 @@ export function NavBar() {
             </Tooltip>
             
             <Tooltip title="Sair">
-              <IconButton size="small" color="inherit">
+              <IconButton size="small" color="inherit" onClick={logout}>
                 <LogoutOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
