@@ -47,6 +47,7 @@ export interface MovementFilter {
   movement_type?: 'income' | 'expense';
   category?: string;
   date_range?: string;
+  q?: Record<string, string | number>;
 }
 
 export interface PaginationParams {
@@ -58,11 +59,33 @@ export async function getMovements(
   filters?: MovementFilter,
   pagination: PaginationParams = { page: 1, per_page: 10 }
 ): Promise<MovementListResponse> {
-  // Converter os filtros para o formato filter[chave]
-  const filterParams = filters
-    ? Object.entries(filters).reduce((acc, [key, value]) => {
+  if (!filters) return {
+    data: [],
+    meta: {
+      pagination: {
+        currentPage: 1,
+        totalPages: 0,
+        totalCount: 0,
+        perPage: pagination.per_page || 10
+      }
+    }
+  };
+
+  const { q, ...otherFilters } = filters;
+
+  // Converter os filtros regulares para o formato filter[chave]
+  const filterParams = Object.entries(otherFilters).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      acc[`filter[${key}]`] = value;
+    }
+    return acc;
+  }, {} as Record<string, string | number>);
+
+  // Converter os filtros q para o formato q[chave]
+  const qParams = q
+    ? Object.entries(q).reduce((acc, [key, value]) => {
       if (value !== undefined) {
-        acc[`filter[${key}]`] = value;
+        acc[`q[${key}]`] = value;
       }
       return acc;
     }, {} as Record<string, string | number>)
@@ -71,6 +94,7 @@ export async function getMovements(
   // Adicionar parâmetros de paginação
   const params = {
     ...filterParams,
+    ...qParams,
     'page[number]': pagination.page,
     'page[size]': pagination.per_page,
   };

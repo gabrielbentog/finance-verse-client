@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   Box,
   Button,
@@ -19,7 +19,22 @@ import {
 } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useEffect, useCallback, useState } from 'react';
+// Hook de debounce personalizado
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 import { getMovements, createMovement, updateMovement, deleteMovement } from '@/services/movementService';
 import { Movement, MovementCreateRequest } from '@/types/movement';
 import { Add as AddIcon } from '@mui/icons-material';
@@ -44,24 +59,37 @@ export default function DespesasPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 800); // 800ms de delay
   const totalDespesas = despesas.reduce((acc, curr) => acc + curr.amount, 0);
 
   const loadDespesas = useCallback(async () => {
     setLoading(true);
     try {
+      const filters: { movement_type: 'expense' | 'income', q?: Record<string, string> } = {
+        movement_type: 'expense',
+        q: {
+          ...(debouncedSearchTerm ? { description_cont: debouncedSearchTerm } : {}),
+          ...(selectedYear ? { date_year_eq: selectedYear } : {}),
+          ...(selectedMonth ? { date_month_eq: selectedMonth } : {})
+        }
+      };
+
       const res = await getMovements(
-        { movement_type: 'expense' },
+        filters,
         { page, per_page: pageSize }
       );
       setDespesas(res.data);
       setTotalPages(res.meta.pagination.totalPages);
       setError(null);
-    } catch (error) {
+    } catch (_error) {
       setError('Erro ao carregar despesas');
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, debouncedSearchTerm, selectedYear, selectedMonth]);
 
   useEffect(() => {
     loadDespesas();
@@ -315,6 +343,94 @@ export default function DespesasPage() {
             >
               Nova Despesa
             </Button>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 2,
+              p: 2,
+              borderRadius: 3,
+            }}
+          >
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                label="Pesquisar por descrição"
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(1); // Reset para primeira página ao pesquisar
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    loadDespesas();
+                  }
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#667eea',
+                    },
+                  }
+                }}
+              />
+              <TextField
+                select
+                label="Ano"
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(e.target.value);
+                  setPage(1);
+                }}
+                sx={{
+                  minWidth: 120,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#667eea',
+                    },
+                  }
+                }}
+              >
+                {Array.from({ length: 10 }, (_, i) => {
+                  const year = new Date().getFullYear() - i;
+                  return (
+                    <MenuItem key={year} value={year.toString()}>
+                      {year}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
+              <TextField
+                select
+                label="Mês"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setPage(1);
+                }}
+                sx={{
+                  minWidth: 120,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#667eea',
+                    },
+                  }
+                }}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {Array.from({ length: 12 }, (_, i) => {
+                  const month = i + 1;
+                  return (
+                    <MenuItem key={month} value={month.toString()}>
+                      {new Date(2000, i).toLocaleString('pt-BR', { month: 'long' })}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
+            </Stack>
           </Paper>
 
           <Paper
