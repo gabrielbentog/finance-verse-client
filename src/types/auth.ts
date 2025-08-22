@@ -33,11 +33,7 @@ export interface UserData {
 
 // Headers de autenticação
 export interface AuthHeaders {
-  'access-token': string;
-  client: string;
-  uid: string;
-  expiry?: string;
-  'token-type'?: string;
+  'Authorization': string;
 }
 
 // Erro de autenticação

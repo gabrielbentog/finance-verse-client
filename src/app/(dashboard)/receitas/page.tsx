@@ -17,6 +17,9 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useFinanceStore } from '@/store/financeStore';
+import { useEffect, useCallback } from 'react';
+import { getMovements, createMovement } from '@/services/movementService';
+import { Movement, MovementCreateRequest, MovementListResponse } from '@/types/movement';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -34,54 +37,84 @@ type TransactionFormData = z.infer<typeof transactionSchema>;
 const ReceitasPage: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { transactions, addTransaction } = useFinanceStore();
-  
-  const receitas = transactions.filter(t => t.type === 'INCOME');
-  console.log('Receitas filtradas:', receitas);
-  const totalReceitas = receitas.reduce((acc, curr) => acc + curr.value, 0);
+  const [receitas, setReceitas] = useState<Movement[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const totalReceitas = receitas.reduce((acc, curr) => acc + curr.amount, 0);
+
+  const loadReceitas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getMovements(
+        { movement_type: 'income' },
+        { page, per_page: pageSize }
+      );
+      setReceitas(res.data);
+      setTotalPages(res.meta.pagination.totalPages);
+      setError(null);
+    } catch (error) {
+      setError('Erro ao carregar receitas');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    loadReceitas();
+  }, [loadReceitas]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
   });
 
-  const onSubmit = (data: TransactionFormData) => {
-    // Garantindo que a data está no formato correto
+  const onSubmit = async (data: TransactionFormData) => {
     const formattedDate = data.date ? new Date(data.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-    console.log('Data sendo salva:', formattedDate);
-    
-    addTransaction({
-      ...data,
+    const movement: MovementCreateRequest = {
+      title: data.description,
+      description: data.description,
+      amount: data.value,
+      movement_type: 'income',
+      category: data.category,
       date: formattedDate,
-      type: 'INCOME',
-    });
-    setIsDialogOpen(false);
-    reset();
+    };
+    try {
+      await createMovement(movement);
+      // Recarregar receitas após criar
+      await loadReceitas();
+      setIsDialogOpen(false);
+      reset();
+    } catch {
+      setError('Erro ao criar receita');
+    }
   };
 
   const columns: GridColDef[] = [
-    { 
-      field: 'date', 
-      headerName: 'Data', 
+    {
+      field: 'date',
+      headerName: 'Data',
       width: 120,
       renderCell: (params) => {
         const date = params.row?.date;
         if (!date) return '-';
-        const [year, month, day] = String(date).split('-');
-        return `${day}/${month}/${year}`;
+        return date;
       }
     },
-    { 
-      field: 'description', 
-      headerName: 'Descrição', 
+    {
+      field: 'title',
+      headerName: 'Descrição',
       width: 250,
       flex: 1
     },
-    { 
-      field: 'category', 
-      headerName: 'Categoria', 
-      width: 150 
+    {
+      field: 'category',
+      headerName: 'Categoria',
+      width: 150
     },
     {
-      field: 'value',
+      field: 'amount',
       headerName: 'Valor',
       width: 150,
       type: 'number',
@@ -97,9 +130,9 @@ const ReceitasPage: React.FC = () => {
 
   return (
     <Box sx={{ bgcolor: '#f5f7fb', height: '100%' }}>
-      <Container 
-        maxWidth={false} 
-        sx={{ 
+      <Container
+        maxWidth={false}
+        sx={{
           py: 3,
           pl: { xs: 2, sm: 2 },
           pr: { xs: 2, sm: 3 },
@@ -173,12 +206,12 @@ const ReceitasPage: React.FC = () => {
             </Button>
           </Paper>
 
-          <Paper 
+          <Paper
             elevation={0}
-            sx={{ 
+            sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: 'calc(100vh - 300px)', 
+              height: 'calc(100vh - 300px)',
               borderRadius: 3,
               overflow: 'hidden',
               position: 'relative'
@@ -190,13 +223,20 @@ const ReceitasPage: React.FC = () => {
               getRowId={(row) => row.id}
               disableRowSelectionOnClick
               autoHeight
+              loading={loading}
+              paginationMode="server"
+              rowCount={totalPages * pageSize}
+              pageSizeOptions={[5, 10, 25]}
+              paginationModel={{ page: page - 1, pageSize }}
+              onPaginationModelChange={(model) => {
+                setPage(model.page + 1);
+                setPageSize(model.pageSize);
+              }}
               initialState={{
-                pagination: { paginationModel: { pageSize: 10 } },
                 sorting: {
                   sortModel: [{ field: 'date', sort: 'desc' }],
                 },
               }}
-              pageSizeOptions={[5, 10, 25]}
               sx={{
                 border: 'none',
                 flex: 1,
@@ -222,8 +262,8 @@ const ReceitasPage: React.FC = () => {
         </Stack>
       </Container>
 
-      <Dialog 
-        open={isDialogOpen} 
+      <Dialog
+        open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         PaperProps={{
           sx: {
@@ -252,15 +292,15 @@ const ReceitasPage: React.FC = () => {
               fullWidth
               label="Valor"
               type="number"
-              inputProps={{ 
+              inputProps={{
                 step: '0.01',
                 min: '0',
               }}
               {...register('value', { valueAsNumber: true })}
               error={!!errors.value}
               helperText={errors.value?.message}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { 
+              sx={{
+                '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                     borderColor: '#667eea',
@@ -275,8 +315,8 @@ const ReceitasPage: React.FC = () => {
               {...register('category')}
               error={!!errors.category}
               helperText={errors.category?.message}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { 
+              sx={{
+                '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                     borderColor: '#667eea',
@@ -291,8 +331,8 @@ const ReceitasPage: React.FC = () => {
               {...register('description')}
               error={!!errors.description}
               helperText={errors.description?.message}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { 
+              sx={{
+                '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                     borderColor: '#667eea',
@@ -309,8 +349,8 @@ const ReceitasPage: React.FC = () => {
               {...register('date')}
               error={!!errors.date}
               helperText={errors.date?.message}
-              sx={{ 
-                '& .MuiOutlinedInput-root': { 
+              sx={{
+                '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                     borderColor: '#667eea',
@@ -321,7 +361,7 @@ const ReceitasPage: React.FC = () => {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button 
+          <Button
             onClick={() => setIsDialogOpen(false)}
             sx={{
               borderRadius: 2,
@@ -336,8 +376,8 @@ const ReceitasPage: React.FC = () => {
           >
             Cancelar
           </Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={handleSubmit(onSubmit)}
             sx={{
               borderRadius: 2,
