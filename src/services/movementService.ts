@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Movement, MovementResponse, MovementListResponse, MovementCreateRequest, MovementUpdateRequest } from '../types/movement';
+import { MovementResponse, MovementListResponse, MovementCreateRequest, MovementUpdateRequest } from '../types/movement';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -65,7 +65,7 @@ export async function getMovements(
         acc[`filter[${key}]`] = value;
       }
       return acc;
-    }, {} as Record<string, any>)
+    }, {} as Record<string, string | number>)
     : {};
 
   // Adicionar parâmetros de paginação

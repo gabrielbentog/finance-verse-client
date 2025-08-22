@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-// ...existing code...
 import {
   Box,
   Button,
@@ -10,16 +9,19 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Menu,
+  MenuItem,
   TextField,
   Stack,
   Paper,
   Typography,
 } from '@mui/material';
+import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useFinanceStore } from '@/store/financeStore';
 import { useEffect, useCallback, useState } from 'react';
-import { getMovements, createMovement } from '@/services/movementService';
-import { Movement, MovementCreateRequest, MovementListResponse } from '@/types/movement';
+import { getMovements, createMovement, updateMovement, deleteMovement } from '@/services/movementService';
+import { Movement, MovementCreateRequest } from '@/types/movement';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -36,7 +38,6 @@ type TransactionFormData = z.infer<typeof transactionSchema>;
 
 export default function DespesasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { transactions, addTransaction } = useFinanceStore();
   const [despesas, setDespesas] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +128,116 @@ export default function DespesasPage() {
         }).format(params.value);
       }
     },
+    {
+      field: 'actions',
+      headerName: 'Ações',
+      width: 100,
+      renderCell: (params) => (
+        <Box>
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenMenu(e, params.row);
+            }}
+          >
+            <MoreVertIcon />
+          </IconButton>
+        </Box>
+      ),
+    },
   ];
+
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedItem, setSelectedItem] = useState<Movement | null>(null);
+
+  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, item: Movement) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedItem(item);
+  };
+
+  const handleCloseMenu = () => {
+    setAnchorEl(null);
+    setSelectedItem(null);
+  };
+
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    setValue: setEditValue,
+    formState: { errors: errorsEdit }
+  } = useForm<TransactionFormData>({
+    resolver: zodResolver(transactionSchema),
+    defaultValues: {
+      value: 0,
+      category: '',
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+    }
+  });
+
+  useEffect(() => {
+    if (selectedItem && isEditDialogOpen) {
+      resetEdit(); // Limpa o form antes de preenchê-lo
+      setEditValue('value', selectedItem.amount);
+      setEditValue('category', selectedItem.category);
+      setEditValue('description', selectedItem.title);
+      setEditValue('date', selectedItem.date);
+    }
+  }, [selectedItem, isEditDialogOpen, setEditValue, resetEdit]);
+
+  const handleEdit = () => {
+    setIsEditDialogOpen(true);
+    setAnchorEl(null); // Só fecha o menu, sem limpar o selectedItem
+  };
+
+  const handleDelete = () => {
+    setIsDeleteDialogOpen(true);
+    setAnchorEl(null); // Só fecha o menu, sem limpar o selectedItem
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedItem) {
+      try {
+        await deleteMovement(selectedItem.id);
+        await loadDespesas();
+        setError(null);
+      } catch (error) {
+        setError('Erro ao excluir despesa');
+      }
+    }
+    setIsDeleteDialogOpen(false);
+    setSelectedItem(null);
+  };
+
+  const handleEditSubmit = async (data: TransactionFormData) => {
+    if (!selectedItem) return;
+
+    const formattedDate = data.date ? new Date(data.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const movement: MovementCreateRequest = {
+      title: data.description,
+      description: data.description,
+      amount: data.value,
+      movement_type: 'expense',
+      category: data.category,
+      date: formattedDate,
+    };
+
+    try {
+      await updateMovement(selectedItem.id, movement);
+      await loadDespesas();
+      setIsEditDialogOpen(false);
+      setSelectedItem(null);
+      resetEdit();
+      setError(null);
+    } catch {
+      setError('Erro ao editar despesa');
+    }
+  };
 
   return (
     <Box sx={{ bgcolor: '#f5f7fb', height: '100%' }}>
@@ -241,6 +351,7 @@ export default function DespesasPage() {
               sx={{
                 border: 'none',
                 flex: 1,
+                px: 2,
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'background.paper',
                   borderBottom: '1px solid',
@@ -256,6 +367,12 @@ export default function DespesasPage() {
                   backgroundColor: 'background.paper',
                   borderTop: '1px solid',
                   borderColor: 'divider',
+                },
+                '& .MuiDataGrid-virtualScroller': {
+                  marginTop: '46px !important',
+                },
+                '& .MuiDataGrid-columnHeadersInner': {
+                  marginLeft: '1px',
                 },
               }}
             />
@@ -391,6 +508,234 @@ export default function DespesasPage() {
               }}
             >
               Salvar
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleCloseMenu}
+          PaperProps={{
+            sx: {
+              boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.1)',
+              borderRadius: 2,
+              minWidth: 120,
+            }
+          }}
+        >
+          <MenuItem onClick={handleEdit}>Editar</MenuItem>
+          <MenuItem
+            onClick={handleDelete}
+            sx={{ color: 'error.main' }}
+          >
+            Excluir
+          </MenuItem>
+        </Menu>
+
+        {/* Modal de Edição */}
+        <Dialog
+          open={isEditDialogOpen}
+          onClose={() => {
+            setIsEditDialogOpen(false);
+            resetEdit();
+          }}
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              position: 'relative',
+              overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #667eea, #764ba2)',
+              },
+            }
+          }}
+        >
+          <form onSubmit={handleSubmitEdit(handleEditSubmit)}>
+            <DialogTitle sx={{ fontSize: '1.25rem', fontWeight: 600 }}>
+              Editar Despesa
+            </DialogTitle>
+            <DialogContent>
+              <Stack spacing={3} sx={{ mt: 2, minWidth: { sm: '400px' } }}>
+                <TextField
+                  required
+                  fullWidth
+                  label="Valor"
+                  type="number"
+                  inputProps={{
+                    step: '0.01',
+                    min: '0',
+                  }}
+                  {...registerEdit('value', { valueAsNumber: true })}
+                  error={!!errorsEdit?.value}
+                  helperText={errorsEdit?.value?.message}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#667eea',
+                      },
+                    }
+                  }}
+                />
+                <TextField
+                  required
+                  fullWidth
+                  label="Categoria"
+                  {...registerEdit('category')}
+                  error={!!errorsEdit?.category}
+                  helperText={errorsEdit?.category?.message}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#667eea',
+                      },
+                    }
+                  }}
+                />
+                <TextField
+                  required
+                  fullWidth
+                  label="Descrição"
+                  {...registerEdit('description')}
+                  error={!!errorsEdit?.description}
+                  helperText={errorsEdit?.description?.message}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#667eea',
+                      },
+                    }
+                  }}
+                />
+                <TextField
+                  required
+                  fullWidth
+                  type="date"
+                  label="Data"
+                  InputLabelProps={{ shrink: true }}
+                  {...registerEdit('date')}
+                  error={!!errorsEdit?.date}
+                  helperText={errorsEdit?.date?.message}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#667eea',
+                      },
+                    }
+                  }}
+                />
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+              <Button
+                type="button"
+                onClick={() => {
+                  setIsEditDialogOpen(false);
+                  resetEdit();
+                }}
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '0.95rem',
+                  px: 3,
+                  color: 'text.secondary',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                type="submit"
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '0.95rem',
+                  px: 3,
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  '&:hover': {
+                    background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                  },
+                }}
+              >
+                Salvar
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
+
+        {/* Modal de Confirmação de Exclusão */}
+        <Dialog
+          open={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              position: 'relative',
+              overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '4px',
+                background: 'linear-gradient(90deg, #667eea, #764ba2)',
+              },
+            }
+          }}
+        >
+          <DialogTitle sx={{ fontSize: '1.25rem', fontWeight: 600 }}>
+            Confirmar Exclusão
+          </DialogTitle>
+          <DialogContent>
+            <Typography>
+              Tem certeza que deseja excluir esta despesa? Esta ação não pode ser desfeita.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button
+              onClick={() => setIsDeleteDialogOpen(false)}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '0.95rem',
+                px: 3,
+                color: 'text.secondary',
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                },
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleConfirmDelete}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '0.95rem',
+                px: 3,
+                background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                '&:hover': {
+                  background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                },
+              }}
+            >
+              Excluir
             </Button>
           </DialogActions>
         </Dialog>
