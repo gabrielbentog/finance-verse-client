@@ -448,10 +448,11 @@ export default function DespesasPage() {
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: 'calc(100vh - 300px)',
+              minHeight: 'calc(100vh - 300px)',
               borderRadius: 3,
               overflow: 'hidden',
-              position: 'relative'
+              position: 'relative',
+              pb: 7 // Adicionando padding bottom para evitar sobreposição com o footer
             }}
           >
             <DataGrid
