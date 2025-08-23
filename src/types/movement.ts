@@ -1,4 +1,15 @@
+import { z } from 'zod';
+
 export type MovementType = 'income' | 'expense';
+
+export const transactionSchema = z.object({
+  value: z.number().min(0.01, 'O valor deve ser maior que zero'),
+  category: z.string().min(1, 'A categoria é obrigatória'),
+  description: z.string().min(1, 'A descrição é obrigatória'),
+  date: z.string(),
+});
+
+export type TransactionFormData = z.infer<typeof transactionSchema>;
 
 export interface Movement {
   id: number;

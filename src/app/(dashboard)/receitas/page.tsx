@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -13,30 +12,37 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  TextField,
   Paper,
   Typography,
   Stack,
 } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { useFinanceStore } from '@/store/financeStore';
-import { useEffect, useCallback } from 'react';
+//import { useFinanceStore } from '@/store/financeStore';
 import { getMovements, createMovement, updateMovement, deleteMovement } from '@/services/movementService';
-import { Movement, MovementCreateRequest } from '@/types/movement';
+import { Movement, MovementCreateRequest, transactionSchema, TransactionFormData } from '@/types/movement';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { MovementFilters } from '@/components/movements/MovementFilters';
+import { MovementForm } from '@/components/movements/MovementForm';
 
-const transactionSchema = z.object({
-  value: z.number().min(0.01, 'O valor deve ser maior que zero'),
-  category: z.string().min(1, 'A categoria é obrigatória'),
-  description: z.string().min(1, 'A descrição é obrigatória'),
-  date: z.string(),
-});
+// Hook de debounce personalizado
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
-type TransactionFormData = z.infer<typeof transactionSchema>;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 const ReceitasPage: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -46,24 +52,38 @@ const ReceitasPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const totalReceitas = receitas.reduce((acc, curr) => acc + curr.amount, 0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [totalReceitas, setTotalReceitas] = useState(0);
+  const debouncedSearchTerm = useDebounce(searchTerm, 800); // 800ms de delay
 
   const loadReceitas = useCallback(async () => {
     setLoading(true);
     try {
+      const filters: { movement_type: 'expense' | 'income', q?: Record<string, string> } = {
+        movement_type: 'income',
+        q: {
+          ...(debouncedSearchTerm ? { description_cont: debouncedSearchTerm } : {}),
+          ...(selectedYear ? { date_year_eq: selectedYear } : {}),
+          ...(selectedMonth ? { date_month_eq: selectedMonth } : {})
+        }
+      };
+
       const res = await getMovements(
-        { movement_type: 'income' },
+        filters,
         { page, per_page: pageSize }
       );
       setReceitas(res.data);
       setTotalPages(res.meta.pagination.totalPages);
+      setTotalReceitas(res.meta.totalAmount);
       setError(null);
     } catch (error) {
       setError('Erro ao carregar receitas');
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, debouncedSearchTerm, selectedYear, selectedMonth]);
 
   useEffect(() => {
     loadReceitas();
@@ -321,6 +341,48 @@ const ReceitasPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
+              mb: 2,
+              p: 2,
+              borderRadius: 3,
+            }}
+          >
+            <MovementFilters
+              searchTerm={searchTerm}
+              selectedYear={selectedYear}
+              selectedMonth={selectedMonth}
+              onSearchChange={(value) => {
+                setSearchTerm(value);
+                setPage(1); // Reset para primeira página ao pesquisar
+              }}
+              onYearChange={(value) => {
+                setSelectedYear(value);
+                setPage(1);
+              }}
+              onMonthChange={(value) => {
+                setSelectedMonth(value);
+                setPage(1);
+              }}
+            />
+          </Paper>
+
+          {error && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                mb: 2,
+                borderRadius: 3,
+                bgcolor: 'error.light',
+                color: 'error.contrastText',
+              }}
+            >
+              <Typography>{error}</Typography>
+            </Paper>
+          )}
+
+          <Paper
+            elevation={0}
+            sx={{
               display: 'flex',
               flexDirection: 'column',
               height: 'calc(100vh - 300px)',
@@ -405,79 +467,10 @@ const ReceitasPage: React.FC = () => {
           Nova Receita
         </DialogTitle>
         <DialogContent>
-          <Stack spacing={3} sx={{ mt: 2, minWidth: { sm: '400px' } }}>
-            <TextField
-              required
-              fullWidth
-              label="Valor"
-              type="number"
-              inputProps={{
-                step: '0.01',
-                min: '0',
-              }}
-              {...register('value', { valueAsNumber: true })}
-              error={!!errors.value}
-              helperText={errors.value?.message}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  },
-                }
-              }}
-            />
-            <TextField
-              required
-              fullWidth
-              label="Categoria"
-              {...register('category')}
-              error={!!errors.category}
-              helperText={errors.category?.message}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  },
-                }
-              }}
-            />
-            <TextField
-              required
-              fullWidth
-              label="Descrição"
-              {...register('description')}
-              error={!!errors.description}
-              helperText={errors.description?.message}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  },
-                }
-              }}
-            />
-            <TextField
-              required
-              fullWidth
-              type="date"
-              label="Data"
-              InputLabelProps={{ shrink: true }}
-              {...register('date')}
-              error={!!errors.date}
-              helperText={errors.date?.message}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#667eea',
-                  },
-                }
-              }}
-            />
-          </Stack>
+          <MovementForm
+            register={register}
+            errors={errors}
+          />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
           <Button
@@ -564,79 +557,10 @@ const ReceitasPage: React.FC = () => {
             Editar Receita
           </DialogTitle>
           <DialogContent>
-            <Stack spacing={3} sx={{ mt: 2, minWidth: { sm: '400px' } }}>
-              <TextField
-                required
-                fullWidth
-                label="Valor"
-                type="number"
-                inputProps={{
-                  step: '0.01',
-                  min: '0',
-                }}
-                {...registerEdit('value', { valueAsNumber: true })}
-                error={!!errorsEdit?.value}
-                helperText={errorsEdit?.value?.message}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
-                    },
-                  }
-                }}
-              />
-              <TextField
-                required
-                fullWidth
-                label="Categoria"
-                {...registerEdit('category')}
-                error={!!errorsEdit?.category}
-                helperText={errorsEdit?.category?.message}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
-                    },
-                  }
-                }}
-              />
-              <TextField
-                required
-                fullWidth
-                label="Descrição"
-                {...registerEdit('description')}
-                error={!!errorsEdit?.description}
-                helperText={errorsEdit?.description?.message}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
-                    },
-                  }
-                }}
-              />
-              <TextField
-                required
-                fullWidth
-                type="date"
-                label="Data"
-                InputLabelProps={{ shrink: true }}
-                {...registerEdit('date')}
-                error={!!errorsEdit?.date}
-                helperText={errorsEdit?.date?.message}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#667eea',
-                    },
-                  }
-                }}
-              />
-            </Stack>
+            <MovementForm
+              register={registerEdit}
+              errors={errorsEdit}
+            />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
             <Button
@@ -741,7 +665,7 @@ const ReceitasPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Box >
   );
 };
 
