@@ -67,7 +67,8 @@ export async function getMovements(
         totalPages: 0,
         totalCount: 0,
         perPage: pagination.per_page || 10
-      }
+      },
+      totalAmount: 0
     }
   };
 

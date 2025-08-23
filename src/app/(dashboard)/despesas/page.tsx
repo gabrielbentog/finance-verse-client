@@ -62,8 +62,8 @@ export default function DespesasPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [totalDespesas, setTotalDespesas] = useState(0);
   const debouncedSearchTerm = useDebounce(searchTerm, 800); // 800ms de delay
-  const totalDespesas = despesas.reduce((acc, curr) => acc + curr.amount, 0);
 
   const loadDespesas = useCallback(async () => {
     setLoading(true);
@@ -83,6 +83,7 @@ export default function DespesasPage() {
       );
       setDespesas(res.data);
       setTotalPages(res.meta.pagination.totalPages);
+      setTotalDespesas(res.meta.totalAmount);
       setError(null);
     } catch (_error) {
       setError('Erro ao carregar despesas');

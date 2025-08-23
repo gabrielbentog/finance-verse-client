@@ -29,8 +29,9 @@ export interface MovementListResponse {
       totalCount: number;
       perPage: number;
     };
+    totalAmount: number;
   };
-}
+};
 
 export interface MovementCreateRequest {
   title: string;
