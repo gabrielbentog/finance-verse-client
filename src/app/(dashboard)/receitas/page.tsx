@@ -26,6 +26,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { MovementFilters } from '@/components/movements/MovementFilters';
 import { MovementForm } from '@/components/movements/MovementForm';
+import { ImportExportButtons } from '@/components/movements/ImportExportButtons';
 
 // Hook de debounce personalizado
 function useDebounce<T>(value: T, delay: number): T {
@@ -318,24 +319,32 @@ const ReceitasPage: React.FC = () => {
                 }).format(totalReceitas)}
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setIsDialogOpen(true)}
-              sx={{
-                px: 3,
-                py: 1,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontSize: '1rem',
-                background: 'linear-gradient(90deg, #667eea, #764ba2)',
-                '&:hover': {
-                  background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
-                },
-              }}
-            >
-              Nova Receita
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <ImportExportButtons
+                onImportSuccess={() => {
+                  loadReceitas();
+                }}
+                onError={(message: string) => setError(message)}
+              />
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setIsDialogOpen(true)}
+                sx={{
+                  px: 3,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  '&:hover': {
+                    background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                  },
+                }}
+              >
+                Nova Receita
+              </Button>
+            </Box>
           </Paper>
 
           <Paper

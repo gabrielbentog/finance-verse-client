@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { ImportExportButtons } from '@/components/movements/ImportExportButtons';
 // Hook de debounce personalizado
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -326,24 +327,32 @@ export default function DespesasPage() {
                 }).format(totalDespesas)}
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setIsDialogOpen(true)}
-              sx={{
-                px: 3,
-                py: 1,
-                borderRadius: 2,
-                textTransform: 'none',
-                fontSize: '1rem',
-                background: 'linear-gradient(90deg, #667eea, #764ba2)',
-                '&:hover': {
-                  background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
-                },
-              }}
-            >
-              Nova Despesa
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <ImportExportButtons
+                onImportSuccess={() => {
+                  loadDespesas();
+                }}
+                onError={(message: string) => setError(message)}
+              />
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setIsDialogOpen(true)}
+                sx={{
+                  px: 3,
+                  py: 1,
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  '&:hover': {
+                    background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                  },
+                }}
+              >
+                Nova Despesa
+              </Button>
+            </Box>
           </Paper>
 
           <Paper

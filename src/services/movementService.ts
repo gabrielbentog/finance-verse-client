@@ -3,7 +3,7 @@ import { MovementResponse, MovementListResponse, MovementCreateRequest, Movement
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const movementApi = axios.create({
+export const movementApi = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
