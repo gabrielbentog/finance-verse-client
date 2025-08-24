@@ -215,7 +215,7 @@ export async function getSubscriptionAnalytics(): Promise<SubscriptionAnalytics>
   }
 }
 
-export async function updateSubscriptionStatus(id: number, status: 'ativa' | 'cancelada' | 'em teste'): Promise<void> {
+export async function updateSubscriptionStatus(id: number, status: 'Ativa' | 'Cancelada' | 'Pausada'): Promise<void> {
   // Envia apenas o campo de status
   await updateSubscription(id, { status });
 }

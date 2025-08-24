@@ -12,7 +12,14 @@ import {
   Alert,
   AlertTitle,
   LinearProgress,
-  Tooltip,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Menu,
+  MenuItem,
 } from '@mui/material';
 // Usamos Box com flex para o layout das cards (evita conflitos de tipagem com Grid)
 import {
@@ -24,21 +31,39 @@ import {
   getSubscriptions,
   getSubscriptionAlerts,
   getSubscriptionAnalytics,
-  updateSubscriptionStatus,
+  deleteSubscription,
+  createSubscription,
+  updateSubscription,
 } from '@/services/subscriptionService';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import CancelIcon from '@mui/icons-material/Cancel';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import { BarChart } from '@mui/x-charts/BarChart';
+import { Add as AddIcon } from '@mui/icons-material';
 import WarningIcon from '@mui/icons-material/Warning';
 
 export default function AssinaturasPage() {
+  // router não usado aqui
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [alerts, setAlerts] = useState<SubscriptionAlert[]>([]);
   const [analytics, setAnalytics] = useState<SubscriptionAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Modais e formulários
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
+
+  const [form, setForm] = useState<Partial<Subscription>>({
+    name: '',
+    category: 'Serviço',
+    amount: 0,
+    isVariableAmount: false,
+    paymentMethod: '',
+    frequency: 'Mensal',
+    nextBillingDate: '',
+    status: 'Ativa',
+  });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -73,15 +98,23 @@ export default function AssinaturasPage() {
     loadData();
   }, [loadData]);
 
-  const handleCancelSubscription = async (id: number) => {
+  // Nota: cancelamento via botão direto foi removido; ações disponíveis no menu (editar/excluir)
+
+  const handleDeleteSubscription = async (id: number) => {
     try {
-      await updateSubscriptionStatus(id, 'cancelada');
-      await loadData(); // Recarrega os dados
+      await deleteSubscription(id);
+      await loadData();
       setError(null);
     } catch (err) {
       console.error(err);
-      setError('Erro ao cancelar assinatura');
+      setError('Erro ao excluir assinatura');
     }
+  };
+
+  const openEditModal = (sub: Subscription) => {
+    setSelectedSubscription(sub);
+    setForm({ ...sub });
+    setIsEditOpen(true);
   };
 
   const getStatusChipColor = (status: Subscription['status']) => {
@@ -97,11 +130,32 @@ export default function AssinaturasPage() {
     }
   };
 
+  // Componente pequeno para o menu de ações (três pontinhos)
+  function ActionsMenu({ row }: { row: Subscription }) {
+    const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+    const open = Boolean(anchorEl);
+    const handleOpen = (e: React.MouseEvent<HTMLElement>) => setAnchorEl(e.currentTarget);
+    const handleClose = () => setAnchorEl(null);
+
+    return (
+      <>
+        <IconButton size="small" onClick={handleOpen}>
+          <MoreVertIcon />
+        </IconButton>
+        <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
+          <MenuItem onClick={() => { handleClose(); openEditModal(row); }}>Editar</MenuItem>
+          <MenuItem onClick={() => { handleClose(); handleDeleteSubscription(row.id); }} sx={{ color: 'error.main' }}>Excluir</MenuItem>
+        </Menu>
+      </>
+    );
+  }
+
   const columns: GridColDef[] = [
     {
       field: 'name',
       headerName: 'Nome',
-      width: 200,
+      minWidth: 160,
+      flex: 1,
     },
     {
       field: 'category',
@@ -149,12 +203,12 @@ export default function AssinaturasPage() {
     {
       field: 'paymentMethod',
       headerName: 'Forma de Pagamento',
-      width: 180,
+      minWidth: 140,
     },
     {
       field: 'frequency',
       headerName: 'Frequência',
-      width: 120,
+      minWidth: 120,
     },
     {
       field: 'nextBillingDate',
@@ -168,7 +222,7 @@ export default function AssinaturasPage() {
     {
       field: 'status',
       headerName: 'Status',
-      width: 120,
+      minWidth: 120,
       renderCell: (params) => (
         <Chip
           label={params.value}
@@ -180,19 +234,16 @@ export default function AssinaturasPage() {
     {
       field: 'actions',
       headerName: 'Ações',
-      width: 100,
+      width: 80,
+      sortable: false,
+      filterable: false,
+      align: 'right',
+      headerAlign: 'right',
       renderCell: (params) => (
-        params.row.status === 'ativa' && (
-          <Tooltip title="Cancelar assinatura">
-            <IconButton
-              size="small"
-              onClick={() => handleCancelSubscription(params.row.id)}
-              sx={{ color: 'error.main' }}
-            >
-              <CancelIcon />
-            </IconButton>
-          </Tooltip>
-        )
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+          {/* Mostrar menu de ações */}
+          <ActionsMenu row={params.row} />
+        </Box>
       ),
     },
   ];
@@ -359,6 +410,46 @@ export default function AssinaturasPage() {
               </Paper>
             </Box>
           </Box>
+          {/* Top bar: botão criar e alert de erro */}
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 2,
+              p: 2,
+              borderRadius: 3,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Box />
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setIsCreateOpen(true)}
+              sx={{
+                px: 3,
+                py: 1,
+                borderRadius: 2,
+                textTransform: 'none',
+                fontSize: '1rem',
+                background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                '&:hover': {
+                  background: 'linear-gradient(90deg, #5a6fd6, #6a4494)',
+                },
+              }}
+            >
+              Nova Assinatura
+            </Button>
+          </Paper>
+
+          {/* Error alert */}
+          {error && (
+            <Alert severity="error" sx={{ borderRadius: 3 }}>
+              {error}
+            </Alert>
+          )}
+
           {/* Alerts */}
           {alerts.length > 0 && (
             <Stack spacing={2}>
@@ -391,36 +482,6 @@ export default function AssinaturasPage() {
             </Stack>
           )}
 
-          {/* Chart */}
-          {analytics && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-              }}
-            >
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                Evolução das Assinaturas
-              </Typography>
-              <Box sx={{ height: 300 }}>
-                <BarChart
-                  xAxis={[{
-                    scaleType: 'band',
-                    data: analytics.monthlyTrend.map(d => d.month),
-                  }]}
-                  series={[
-                    {
-                      data: analytics.monthlyTrend.map(d => d.total),
-                      color: '#667eea',
-                    },
-                  ]}
-                  height={300}
-                />
-              </Box>
-            </Paper>
-          )}
-
           {/* Subscriptions Table */}
           <Paper
             elevation={0}
@@ -440,6 +501,8 @@ export default function AssinaturasPage() {
               loading={loading}
               disableRowSelectionOnClick
               autoHeight
+              density="comfortable"
+              rowHeight={52}
               pageSizeOptions={[5, 10, 25]}
               initialState={{
                 pagination: {
@@ -451,7 +514,7 @@ export default function AssinaturasPage() {
               }}
               sx={{
                 border: 'none',
-                px: 2,
+                px: 1,
                 '& .MuiDataGrid-columnHeaders': {
                   backgroundColor: 'background.paper',
                   borderBottom: '1px solid',
@@ -471,6 +534,61 @@ export default function AssinaturasPage() {
               }}
             />
           </Paper>
+          {/* Modal Criar */}
+          <Dialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <DialogTitle>Criar Assinatura</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
+                <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
+                <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
+                <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
+                <TextField label="Próxima Cobrança" type="date" value={form.nextBillingDate || ''} onChange={e => setForm(f => ({ ...f, nextBillingDate: e.target.value }))} InputLabelProps={{ shrink: true }} fullWidth />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
+              <Button onClick={async () => {
+                try {
+                  await createSubscription(form as Partial<Subscription>);
+                  setIsCreateOpen(false);
+                  setForm({});
+                  await loadData();
+                } catch (err) {
+                  console.error(err);
+                  setError('Erro ao criar assinatura');
+                }
+              }} variant="contained">Criar</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Modal Editar */}
+          <Dialog open={isEditOpen} onClose={() => setIsEditOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <DialogTitle>Editar Assinatura</DialogTitle>
+            <DialogContent>
+              <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
+                <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
+                <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
+                <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
+                <TextField label="Próxima Cobrança" type="date" value={form.nextBillingDate || ''} onChange={e => setForm(f => ({ ...f, nextBillingDate: e.target.value }))} InputLabelProps={{ shrink: true }} fullWidth />
+              </Stack>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+              <Button onClick={async () => {
+                try {
+                  if (!selectedSubscription) return;
+                  await updateSubscription(selectedSubscription.id, form as Partial<Subscription>);
+                  setIsEditOpen(false);
+                  setSelectedSubscription(null);
+                  setForm({});
+                  await loadData();
+                } catch (err) {
+                  console.error(err);
+                  setError('Erro ao atualizar assinatura');
+                }
+              }} variant="contained">Salvar</Button>
+            </DialogActions>
+          </Dialog>
         </Stack>
       </Container>
     </Box >
