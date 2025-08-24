@@ -6,7 +6,7 @@ export interface Subscription {
   isVariableAmount: boolean;
   paymentMethod: string;
   frequency: 'Mensal' | 'Anual' | 'Semanal' | 'Única';
-  nextBillingDate: string;
+  billingDay: string;
   status: 'Ativa' | 'Pausada' | 'Cancelada';
   startDate: string;
   totalSpent: number;

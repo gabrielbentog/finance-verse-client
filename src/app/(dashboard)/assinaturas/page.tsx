@@ -61,9 +61,20 @@ export default function AssinaturasPage() {
     isVariableAmount: false,
     paymentMethod: '',
     frequency: 'Mensal',
-    nextBillingDate: '',
+    billingDay: '',
     status: 'Ativa',
   });
+
+  const initialForm: Partial<Subscription> = {
+    name: '',
+    category: 'Serviço',
+    amount: 0,
+    isVariableAmount: false,
+    paymentMethod: '',
+    frequency: 'Mensal',
+    billingDay: '',
+    status: 'Ativa',
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -115,6 +126,76 @@ export default function AssinaturasPage() {
     setSelectedSubscription(sub);
     setForm({ ...sub });
     setIsEditOpen(true);
+  };
+
+  const resetForm = () => setForm({ ...initialForm });
+
+  // Map enums from Portuguese (UI) to English (backend)
+  const mapEnumsToBackend = (f: Partial<Subscription>) => {
+    const categoryMap: Record<string, string> = {
+      'Serviço': 'service',
+      'Produto': 'product',
+      'Assinatura': 'membership',
+      'Outro': 'other',
+    };
+
+    const frequencyMap: Record<string, string> = {
+      'Mensal': 'monthly',
+      'Anual': 'yearly',
+      'Semanal': 'weekly',
+      'Única': 'once',
+    };
+
+    const statusMap: Record<string, string> = {
+      'Ativa': 'active',
+      'Pausada': 'paused',
+      'Cancelada': 'cancelled',
+    };
+
+    const payload: Record<string, unknown> = {
+      name: f.name as string | undefined,
+      amount: (typeof f.amount === 'number' ? f.amount : Number(f.amount ?? 0)) as number,
+      isVariableAmount: Boolean(f.isVariableAmount),
+      paymentMethod: f.paymentMethod as string | undefined,
+      category: (categoryMap[f.category as string] ?? f.category) as string | undefined,
+      frequency: (frequencyMap[f.frequency as string] ?? f.frequency) as string | undefined,
+      status: (statusMap[f.status as string] ?? f.status) as string | undefined,
+      billingDay: (f.billingDay === '' || f.billingDay === undefined) ? null : Number(f.billingDay),
+    };
+
+    return payload;
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = mapEnumsToBackend(form);
+      await createSubscription(payload as unknown as Partial<Subscription>);
+      setIsCreateOpen(false);
+      resetForm();
+      await loadData();
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError('Erro ao criar assinatura');
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!selectedSubscription) return;
+      const payload = mapEnumsToBackend(form);
+      await updateSubscription(selectedSubscription.id, payload as unknown as Partial<Subscription>);
+      setIsEditOpen(false);
+      setSelectedSubscription(null);
+      resetForm();
+      await loadData();
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError('Erro ao atualizar assinatura');
+    }
   };
 
   const getStatusChipColor = (status: Subscription['status']) => {
@@ -211,12 +292,20 @@ export default function AssinaturasPage() {
       minWidth: 120,
     },
     {
-      field: 'nextBillingDate',
-      headerName: 'Próxima Cobrança',
+      field: 'billingDay',
+      headerName: 'Próxima cobrança',
       width: 150,
-      valueFormatter: (params: { value: string | null | undefined }) => {
-        if (!params?.value) return '-';
-        return new Date(params.value).toLocaleDateString('pt-BR');
+      renderCell: (params) => {
+        const row = params.row as Subscription & { nextBillingDate?: string };
+        const next = row.nextBillingDate;
+        if (next) {
+          const d = new Date(next);
+          if (!Number.isNaN(d.getTime())) {
+            return new Intl.DateTimeFormat('pt-BR').format(d);
+          }
+        }
+
+        return '-';
       },
     },
     {
@@ -509,7 +598,7 @@ export default function AssinaturasPage() {
                   paginationModel: { pageSize: 10 },
                 },
                 sorting: {
-                  sortModel: [{ field: 'nextBillingDate', sort: 'asc' }],
+                  sortModel: [{ field: 'billingDay', sort: 'asc' }],
                 },
               }}
               sx={{
@@ -537,57 +626,167 @@ export default function AssinaturasPage() {
           {/* Modal Criar */}
           <Dialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
             <DialogTitle>Criar Assinatura</DialogTitle>
-            <DialogContent>
-              <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
-                <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
-                <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
-                <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
-                <TextField label="Próxima Cobrança" type="date" value={form.nextBillingDate || ''} onChange={e => setForm(f => ({ ...f, nextBillingDate: e.target.value }))} InputLabelProps={{ shrink: true }} fullWidth />
-              </Stack>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={async () => {
-                try {
-                  await createSubscription(form as Partial<Subscription>);
-                  setIsCreateOpen(false);
-                  setForm({});
-                  await loadData();
-                } catch (err) {
-                  console.error(err);
-                  setError('Erro ao criar assinatura');
-                }
-              }} variant="contained">Criar</Button>
-            </DialogActions>
+            <form onSubmit={handleCreateSubmit}>
+              <DialogContent>
+                <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
+                  <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
+                  <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
+                  <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
+
+                  <TextField
+                    select
+                    label="Categoria"
+                    value={form.category ?? 'Serviço'}
+                    onChange={e => setForm(f => ({ ...f, category: e.target.value as Subscription['category'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Serviço'}>Serviço</MenuItem>
+                    <MenuItem value={'Produto'}>Produto</MenuItem>
+                    <MenuItem value={'Assinatura'}>Assinatura</MenuItem>
+                    <MenuItem value={'Outro'}>Outro</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Frequência"
+                    value={form.frequency ?? 'Mensal'}
+                    onChange={e => setForm(f => ({ ...f, frequency: e.target.value as Subscription['frequency'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Mensal'}>Mensal</MenuItem>
+                    <MenuItem value={'Anual'}>Anual</MenuItem>
+                    <MenuItem value={'Semanal'}>Semanal</MenuItem>
+                    <MenuItem value={'Única'}>Única</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Dia de Cobrança"
+                    value={form.billingDay ?? ''}
+                    onChange={e => setForm(f => ({ ...f, billingDay: e.target.value }))}
+                    fullWidth
+                    SelectProps={{
+                      MenuProps: {
+                        anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                        transformOrigin: { vertical: 'top', horizontal: 'left' },
+                        PaperProps: { sx: { maxHeight: 240, width: 'auto' } },
+                      }
+                    }}
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <MenuItem key={d} value={String(d)}>{d}</MenuItem>
+                    ))}
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Status"
+                    value={form.status ?? 'Ativa'}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value as Subscription['status'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Ativa'}>Ativa</MenuItem>
+                    <MenuItem value={'Pausada'}>Pausada</MenuItem>
+                    <MenuItem value={'Cancelada'}>Cancelada</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    label="Variável?"
+                    value={form.isVariableAmount ? 'Sim' : 'Não'}
+                    onClick={() => setForm(f => ({ ...f, isVariableAmount: !f.isVariableAmount }))}
+                    InputProps={{ readOnly: true }}
+                    fullWidth
+                  />
+                </Stack>
+              </DialogContent>
+              <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+                <Button onClick={() => { setIsCreateOpen(false); resetForm(); }} sx={{ borderRadius: 2, textTransform: 'none', fontSize: '0.95rem', px: 3, color: 'text.secondary', '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' } }}>Cancelar</Button>
+                <Button variant="contained" type="submit" sx={{ borderRadius: 2, textTransform: 'none', fontSize: '0.95rem', px: 3, background: 'linear-gradient(90deg, #667eea, #764ba2)', '&:hover': { background: 'linear-gradient(90deg, #5a6fd6, #6a4494)' } }}>Criar</Button>
+              </DialogActions>
+            </form>
           </Dialog>
 
           {/* Modal Editar */}
-          <Dialog open={isEditOpen} onClose={() => setIsEditOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
-            <DialogTitle>Editar Assinatura</DialogTitle>
-            <DialogContent>
-              <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
-                <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
-                <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
-                <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
-                <TextField label="Próxima Cobrança" type="date" value={form.nextBillingDate || ''} onChange={e => setForm(f => ({ ...f, nextBillingDate: e.target.value }))} InputLabelProps={{ shrink: true }} fullWidth />
-              </Stack>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-              <Button onClick={async () => {
-                try {
-                  if (!selectedSubscription) return;
-                  await updateSubscription(selectedSubscription.id, form as Partial<Subscription>);
-                  setIsEditOpen(false);
-                  setSelectedSubscription(null);
-                  setForm({});
-                  await loadData();
-                } catch (err) {
-                  console.error(err);
-                  setError('Erro ao atualizar assinatura');
-                }
-              }} variant="contained">Salvar</Button>
-            </DialogActions>
+          <Dialog open={isEditOpen} onClose={() => { setIsEditOpen(false); resetForm(); }} PaperProps={{ sx: { borderRadius: 3 } }}>
+            <form onSubmit={handleEditSubmit}>
+              <DialogTitle>Editar Assinatura</DialogTitle>
+              <DialogContent>
+                <Stack spacing={2} sx={{ mt: 1, minWidth: { sm: 420 } }}>
+                  <TextField label="Nome" value={form.name || ''} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth />
+                  <TextField label="Valor" type="number" value={form.amount ?? ''} onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))} fullWidth />
+                  <TextField label="Forma de Pagamento" value={form.paymentMethod || ''} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))} fullWidth />
+
+                  <TextField
+                    select
+                    label="Categoria"
+                    value={form.category ?? 'Serviço'}
+                    onChange={e => setForm(f => ({ ...f, category: e.target.value as Subscription['category'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Serviço'}>Serviço</MenuItem>
+                    <MenuItem value={'Produto'}>Produto</MenuItem>
+                    <MenuItem value={'Assinatura'}>Assinatura</MenuItem>
+                    <MenuItem value={'Outro'}>Outro</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Frequência"
+                    value={form.frequency ?? 'Mensal'}
+                    onChange={e => setForm(f => ({ ...f, frequency: e.target.value as Subscription['frequency'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Mensal'}>Mensal</MenuItem>
+                    <MenuItem value={'Anual'}>Anual</MenuItem>
+                    <MenuItem value={'Semanal'}>Semanal</MenuItem>
+                    <MenuItem value={'Única'}>Única</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Dia de Cobrança"
+                    value={form.billingDay ?? ''}
+                    onChange={e => setForm(f => ({ ...f, billingDay: e.target.value }))}
+                    fullWidth
+                    SelectProps={{
+                      MenuProps: {
+                        anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                        transformOrigin: { vertical: 'top', horizontal: 'left' },
+                        PaperProps: { sx: { maxHeight: 240, width: 'auto' } },
+                      }
+                    }}
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <MenuItem key={d} value={String(d)}>{d}</MenuItem>
+                    ))}
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="Status"
+                    value={form.status ?? 'Ativa'}
+                    onChange={e => setForm(f => ({ ...f, status: e.target.value as Subscription['status'] }))}
+                    fullWidth
+                  >
+                    <MenuItem value={'Ativa'}>Ativa</MenuItem>
+                    <MenuItem value={'Pausada'}>Pausada</MenuItem>
+                    <MenuItem value={'Cancelada'}>Cancelada</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    label="Variável?"
+                    value={form.isVariableAmount ? 'Sim' : 'Não'}
+                    onClick={() => setForm(f => ({ ...f, isVariableAmount: !f.isVariableAmount }))}
+                    InputProps={{ readOnly: true }}
+                    fullWidth
+                  />
+                </Stack>
+              </DialogContent>
+              <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+                <Button type="button" onClick={() => { setIsEditOpen(false); setSelectedSubscription(null); resetForm(); }} sx={{ borderRadius: 2, textTransform: 'none', fontSize: '0.95rem', px: 3, color: 'text.secondary', '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' } }}>Cancelar</Button>
+                <Button variant="contained" type="submit" sx={{ borderRadius: 2, textTransform: 'none', fontSize: '0.95rem', px: 3, background: 'linear-gradient(90deg, #667eea, #764ba2)', '&:hover': { background: 'linear-gradient(90deg, #5a6fd6, #6a4494)' } }}>Salvar</Button>
+              </DialogActions>
+            </form>
           </Dialog>
         </Stack>
       </Container>
