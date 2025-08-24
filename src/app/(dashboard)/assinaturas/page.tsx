@@ -43,17 +43,26 @@ export default function AssinaturasPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [subs, alertsData, analyticsData] = await Promise.all([
+      const results = await Promise.allSettled([
         getSubscriptions(),
         getSubscriptionAlerts(),
         getSubscriptionAnalytics(),
       ]);
+
+      const subs = results[0].status === 'fulfilled' ? (results[0] as PromiseFulfilledResult<Subscription[]>).value : [];
+      const alertsData = results[1].status === 'fulfilled' ? (results[1] as PromiseFulfilledResult<SubscriptionAlert[]>).value : [];
+      const analyticsData = results[2].status === 'fulfilled' ? (results[2] as PromiseFulfilledResult<SubscriptionAnalytics>).value : null;
+
       setSubscriptions(subs);
       setAlerts(alertsData);
       setAnalytics(analyticsData);
       setError(null);
     } catch (err) {
       console.error(err);
+      // Não quebrar a página: manter UI vazia quando a API falhar
+      setSubscriptions([]);
+      setAlerts([]);
+      setAnalytics(null);
       setError('Erro ao carregar dados das assinaturas');
     } finally {
       setLoading(false);
@@ -77,11 +86,11 @@ export default function AssinaturasPage() {
 
   const getStatusChipColor = (status: Subscription['status']) => {
     switch (status) {
-      case 'ativa':
+      case 'Ativa':
         return 'success';
-      case 'cancelada':
+      case 'Cancelada':
         return 'error';
-      case 'em teste':
+      case 'Pausada':
         return 'warning';
       default:
         return 'default';
@@ -111,19 +120,20 @@ export default function AssinaturasPage() {
       headerName: 'Valor',
       width: 150,
       valueFormatter: (params: { value: number | undefined }) => {
-        if (typeof params.value !== 'number') return '-';
+        const val = params?.value;
+        if (typeof val !== 'number' || Number.isNaN(val)) return '-';
         return new Intl.NumberFormat('pt-BR', {
           style: 'currency',
           currency: 'BRL'
-        }).format(params.value);
+        }).format(val);
       },
       renderCell: (params) => (
         <Box>
-          {new Intl.NumberFormat('pt-BR', {
+          {typeof params.row?.amount === 'number' ? new Intl.NumberFormat('pt-BR', {
             style: 'currency',
             currency: 'BRL'
-          }).format(params.row.amount)}
-          {params.row.isVariableAmount && (
+          }).format(params.row.amount) : '-'}
+          {params.row?.isVariableAmount && (
             <Typography
               component="span"
               variant="caption"
@@ -151,7 +161,7 @@ export default function AssinaturasPage() {
       headerName: 'Próxima Cobrança',
       width: 150,
       valueFormatter: (params: { value: string | null | undefined }) => {
-        if (!params.value) return '-';
+        if (!params?.value) return '-';
         return new Date(params.value).toLocaleDateString('pt-BR');
       },
     },
@@ -187,9 +197,9 @@ export default function AssinaturasPage() {
     },
   ];
 
-  const isTrendingUp = analytics && analytics.monthlyTrend.length >= 2 &&
+  const isTrendingUp: boolean = !!(analytics && Array.isArray(analytics.monthlyTrend) && analytics.monthlyTrend.length >= 2 &&
     analytics.monthlyTrend[analytics.monthlyTrend.length - 1].total >
-    analytics.monthlyTrend[analytics.monthlyTrend.length - 2].total;
+    analytics.monthlyTrend[analytics.monthlyTrend.length - 2].total);
 
   return (
     <Box sx={{ bgcolor: '#f5f7fb', height: '100%' }}>
@@ -341,7 +351,7 @@ export default function AssinaturasPage() {
                   Assinaturas Ativas
                 </Typography>
                 <Typography variant="h4" sx={{ fontWeight: 600 }}>
-                  {subscriptions.filter(s => s.status === 'ativa').length}
+                  {analytics?.activeSubscriptionsCount ?? subscriptions.filter(s => s.status === 'Ativa').length}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   de {subscriptions.length} total

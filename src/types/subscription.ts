@@ -1,13 +1,13 @@
 export interface Subscription {
   id: number;
   name: string;
-  category: 'Lazer' | 'Educação' | 'Utilidade' | 'Trabalho';
+  category: 'Serviço' | 'Produto' | 'Assinatura' | 'Outro';
   amount: number;
   isVariableAmount: boolean;
   paymentMethod: string;
-  frequency: 'mensal' | 'anual' | 'semanal';
+  frequency: 'Mensal' | 'Anual' | 'Semanal' | 'Única';
   nextBillingDate: string;
-  status: 'ativa' | 'cancelada' | 'em teste';
+  status: 'Ativa' | 'Pausada' | 'Cancelada';
   startDate: string;
   totalSpent: number;
   lastUsed?: string;
@@ -26,4 +26,6 @@ export interface SubscriptionAnalytics {
     month: string;
     total: number;
   }>;
+  // Novo campo vindo do endpoint analytics
+  activeSubscriptionsCount?: number;
 }
