@@ -43,35 +43,36 @@ export function NavBar() {
 
   const menuItems = [
     { text: 'Dashboard', icon: <Dashboard />, href: '/dashboard' },
+    { text: 'Assinaturas', icon: <Receipt />, href: '/assinaturas' },
     { text: 'Receitas', icon: <MonetizationOn />, href: '/receitas' },
     { text: 'Despesas', icon: <Receipt />, href: '/despesas' },
     { text: 'Relatórios', icon: <PieChart />, href: '/relatorios' },
   ];
 
   const drawer = (
-    <Box sx={{ 
-      height: '100%', 
-      display: 'flex', 
+    <Box sx={{
+      height: '100%',
+      display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        py: 2, 
+      <Box sx={{
+        display: 'flex',
+        alignItems: 'center',
+        py: 2,
         px: 3,
         height: '64px',
       }}>
-        <AccountBalanceWallet sx={{ 
-          mr: 1.5, 
+        <AccountBalanceWallet sx={{
+          mr: 1.5,
           color: 'primary.main',
           background: isDarkMode ? 'rgba(102, 126, 234, 0.1)' : 'rgba(102, 126, 234, 0.1)',
           p: 0.5,
           borderRadius: 1,
         }} />
-        <Typography 
-          variant="h6" 
-          sx={{ 
+        <Typography
+          variant="h6"
+          sx={{
             fontWeight: 700,
             background: 'linear-gradient(90deg, #667eea, #764ba2)',
             WebkitBackgroundClip: 'text',
@@ -81,10 +82,10 @@ export function NavBar() {
           Finance Verse
         </Typography>
       </Box>
-      
+
       <Divider />
-      
-      <Box sx={{ 
+
+      <Box sx={{
         mt: 2,
         px: 2,
         overflowY: 'auto',
@@ -97,18 +98,18 @@ export function NavBar() {
             const isActive = item.href === '/dashboard'
               ? pathname === '/dashboard'
               : pathname?.includes(item.href.substring(1));
-            
+
             return (
               <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-                <ListItemButton 
-                  component={Link} 
+                <ListItemButton
+                  component={Link}
                   href={item.href}
                   sx={{
                     borderRadius: 2,
                     background: isActive ? 'linear-gradient(90deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15))' : 'transparent',
                     color: isActive ? 'primary.main' : 'text.primary',
                     '&:hover': {
-                      background: isActive 
+                      background: isActive
                         ? 'linear-gradient(90deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25))'
                         : 'rgba(0, 0, 0, 0.04)',
                     },
@@ -126,15 +127,15 @@ export function NavBar() {
                     pl: isActive ? 3 : 2,
                   }}
                 >
-                  <ListItemIcon sx={{ 
+                  <ListItemIcon sx={{
                     color: isActive ? 'primary.main' : 'text.secondary',
                     minWidth: '40px',
                   }}>
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText 
-                    primary={item.text} 
-                    primaryTypographyProps={{ 
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
                       fontWeight: isActive ? 600 : 400,
                     }}
                   />
@@ -144,13 +145,13 @@ export function NavBar() {
           })}
         </List>
       </Box>
-      
+
       <Divider sx={{ mt: 'auto' }} />
-      
+
       <Box sx={{ p: 2 }}>
-        <Box 
-          sx={{ 
-            display: 'flex', 
+        <Box
+          sx={{
+            display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             borderRadius: 2,
@@ -161,9 +162,9 @@ export function NavBar() {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar 
-              sx={{ 
-                width: 36, 
+            <Avatar
+              sx={{
+                width: 36,
                 height: 36,
                 background: 'linear-gradient(90deg, #667eea, #764ba2)',
               }}
@@ -179,14 +180,14 @@ export function NavBar() {
               </Typography>
             </Box>
           </Box>
-          
+
           <Box>
             <Tooltip title="Alterar tema">
               <IconButton size="small" onClick={toggleTheme} sx={{ mr: 0.5 }}>
                 {isDarkMode ? <Brightness7 fontSize="small" /> : <Brightness4 fontSize="small" />}
               </IconButton>
             </Tooltip>
-            
+
             <Tooltip title="Sair">
               <IconButton size="small" color="inherit" onClick={logout}>
                 <LogoutOutlined fontSize="small" />
@@ -200,10 +201,10 @@ export function NavBar() {
 
   return (
     <>
-      <AppBar 
-        position="fixed" 
+      <AppBar
+        position="fixed"
         elevation={0}
-        sx={{ 
+        sx={{
           zIndex: 2000,
           bgcolor: 'background.paper',
           color: 'text.primary',
@@ -220,11 +221,11 @@ export function NavBar() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography 
-            variant="h6" 
-            noWrap 
-            component="div" 
-            sx={{ 
+          <Typography
+            variant="h6"
+            noWrap
+            component="div"
+            sx={{
               flexGrow: 1,
               fontWeight: 700,
               background: 'linear-gradient(90deg, #667eea, #764ba2)',
@@ -256,8 +257,8 @@ export function NavBar() {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { 
-              boxSizing: 'border-box', 
+            '& .MuiDrawer-paper': {
+              boxSizing: 'border-box',
               width: drawerWidth,
               borderRight: '1px solid',
               borderColor: 'divider',
