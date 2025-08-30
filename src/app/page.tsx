@@ -38,7 +38,7 @@ export default function Home() {
   const handleAccess = () => {
     if (isLoading) return
     if (user) router.push("/dashboard")
-    else router.push("/(auth)/login")
+    else router.push("/login")
   }
 
   return (

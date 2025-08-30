@@ -13,6 +13,8 @@ import {
   Menu,
   MenuItem,
   TextField,
+  Checkbox,
+  FormControlLabel,
   Stack,
   Paper,
   Typography,
@@ -38,8 +40,11 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 import { getMovements, createMovement, updateMovement, deleteMovement } from '@/services/movementService';
 import { Movement, MovementCreateRequest } from '@/types/movement';
+
+// Movement may have optional IRPF fields from the API
+type MaybeMovement = Movement & { is_business?: boolean; activity_kind?: number };
 import { Add as AddIcon } from '@mui/icons-material';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -48,6 +53,9 @@ const transactionSchema = z.object({
   category: z.string().min(1, 'A categoria é obrigatória'),
   description: z.string().min(1, 'A descrição é obrigatória'),
   date: z.string(),
+  is_business: z.boolean().optional(),
+  // activity_kind can come as string from select; accept number or string and coerce later
+  activity_kind: z.union([z.number(), z.string()]).optional(),
 });
 
 type TransactionFormData = z.infer<typeof transactionSchema>;
@@ -56,7 +64,7 @@ export default function DespesasPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [despesas, setDespesas] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(10);
@@ -86,7 +94,7 @@ export default function DespesasPage() {
       setTotalPages(res.meta.pagination.totalPages);
       setTotalDespesas(res.meta.totalAmount);
       setError(null);
-    } catch (_error) {
+    } catch {
       setError('Erro ao carregar despesas');
     } finally {
       setLoading(false);
@@ -97,7 +105,7 @@ export default function DespesasPage() {
     loadDespesas();
   }, [loadDespesas]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<TransactionFormData>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
   });
 
@@ -110,6 +118,9 @@ export default function DespesasPage() {
       movement_type: 'expense',
       category: data.category,
       date: formattedDate,
+      // only allowed for expenses as per API
+      ...(data.is_business !== undefined ? { is_business: data.is_business } : {}),
+      ...(data.activity_kind !== undefined ? { activity_kind: data.activity_kind } : {}),
     };
     try {
       await createMovement(movement);
@@ -118,6 +129,7 @@ export default function DespesasPage() {
       setIsDialogOpen(false);
       reset();
     } catch {
+      // keep error state minimal
       setError('Erro ao criar despesa');
     }
   };
@@ -179,7 +191,7 @@ export default function DespesasPage() {
   ];
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedItem, setSelectedItem] = useState<Movement | null>(null);
+  const [selectedItem, setSelectedItem] = useState<MaybeMovement | null>(null);
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>, item: Movement) => {
     setAnchorEl(event.currentTarget);
@@ -199,6 +211,7 @@ export default function DespesasPage() {
     handleSubmit: handleSubmitEdit,
     reset: resetEdit,
     setValue: setEditValue,
+    control: controlEdit,
     formState: { errors: errorsEdit }
   } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -207,16 +220,20 @@ export default function DespesasPage() {
       category: '',
       description: '',
       date: new Date().toISOString().split('T')[0],
+      is_business: false,
+      activity_kind: undefined,
     }
   });
 
   useEffect(() => {
     if (selectedItem && isEditDialogOpen) {
       resetEdit(); // Limpa o form antes de preenchê-lo
-      setEditValue('value', selectedItem.amount);
-      setEditValue('category', selectedItem.category);
-      setEditValue('description', selectedItem.title);
-      setEditValue('date', selectedItem.date);
+      setEditValue('value', selectedItem.amount as number);
+      setEditValue('category', selectedItem.category as string);
+      setEditValue('description', selectedItem.title as string);
+      setEditValue('date', selectedItem.date as string);
+      setEditValue('is_business', Boolean(selectedItem.is_business));
+      setEditValue('activity_kind', selectedItem.activity_kind ?? '');
     }
   }, [selectedItem, isEditDialogOpen, setEditValue, resetEdit]);
 
@@ -236,7 +253,7 @@ export default function DespesasPage() {
         await deleteMovement(selectedItem.id);
         await loadDespesas();
         setError(null);
-      } catch (error) {
+      } catch {
         setError('Erro ao excluir despesa');
       }
     }
@@ -255,6 +272,8 @@ export default function DespesasPage() {
       movement_type: 'expense',
       category: data.category,
       date: formattedDate,
+      ...(data.is_business !== undefined ? { is_business: data.is_business } : {}),
+      ...(data.activity_kind !== undefined ? { activity_kind: data.activity_kind } : {}),
     };
 
     try {
@@ -602,6 +621,33 @@ export default function DespesasPage() {
                   }
                 }}
               />
+              <Controller
+                name="is_business"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={Boolean(field.value)} />}
+                    label="Relacionado ao meu negócio (IRPF - MEI)"
+                  />
+                )}
+              />
+              <Controller
+                name="activity_kind"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    select
+                    label="Tipo de Atividade (MEI)"
+                    {...field}
+                    sx={{ minWidth: 200 }}
+                  >
+                    <MenuItem value="">Nenhum</MenuItem>
+                    <MenuItem value={0}>Comércio</MenuItem>
+                    <MenuItem value={1}>Transporte</MenuItem>
+                    <MenuItem value={2}>Serviços</MenuItem>
+                  </TextField>
+                )}
+              />
             </Stack>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
@@ -760,6 +806,33 @@ export default function DespesasPage() {
                       },
                     }
                   }}
+                />
+                <Controller
+                  name="is_business"
+                  control={controlEdit}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={<Checkbox {...field} checked={Boolean(field.value)} />}
+                      label="Relacionado ao meu negócio (IRPF - MEI)"
+                    />
+                  )}
+                />
+                <Controller
+                  name="activity_kind"
+                  control={controlEdit}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="Tipo de Atividade (MEI)"
+                      {...field}
+                      sx={{ minWidth: 200 }}
+                    >
+                      <MenuItem value="">Nenhum</MenuItem>
+                      <MenuItem value={0}>Comércio</MenuItem>
+                      <MenuItem value={1}>Transporte</MenuItem>
+                      <MenuItem value={2}>Serviços</MenuItem>
+                    </TextField>
+                  )}
                 />
               </Stack>
             </DialogContent>
