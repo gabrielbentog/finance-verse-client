@@ -16,6 +16,66 @@ export default function DashboardPage() {
 
   const { data, loading, error } = useDashboardData({ year, month });
 
+  const mapCategoryToLabel = (raw: unknown): string => {
+    if (raw === undefined || raw === null || raw === '') return '';
+    // if it's already a symbol like 'food'
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      const symbols = ['food', 'transport', 'internet', 'lodging', 'marketing', 'rent', 'supplies', 'education', 'health', 'personal', 'other'];
+      if (symbols.includes(s)) {
+        const LABEL_MAP: Record<string, string> = {
+          food: 'Alimentação',
+          transport: 'Transporte',
+          internet: 'Internet',
+          lodging: 'Hospedagem',
+          marketing: 'Marketing',
+          rent: 'Aluguel',
+          supplies: 'Materiais',
+          education: 'Educação',
+          health: 'Saúde',
+          personal: 'Pessoal',
+          other: 'Outro',
+        };
+        return LABEL_MAP[s] ?? s;
+      }
+      // maybe it's already a localized label
+      const normalized = s.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      const LOOKUP: Record<string, string> = {
+        alimentacao: 'Alimentação',
+        transporte: 'Transporte',
+        internet: 'Internet',
+        hospedagem: 'Hospedagem',
+        marketing: 'Marketing',
+        aluguel: 'Aluguel',
+        materiais: 'Materiais',
+        educacao: 'Educação',
+        saude: 'Saúde',
+        pessoal: 'Pessoal',
+        outro: 'Outro',
+      };
+      const key = normalized.toLowerCase();
+      if (LOOKUP[key]) return LOOKUP[key];
+      return s; // fallback keep as-is
+    }
+    if (typeof raw === 'number') {
+      const NUM_MAP: Record<number, string> = {
+        0: 'Alimentação',
+        1: 'Transporte',
+        2: 'Internet',
+        3: 'Hospedagem',
+        4: 'Marketing',
+        5: 'Aluguel',
+        6: 'Materiais',
+        7: 'Educação',
+        8: 'Saúde',
+        9: 'Pessoal',
+        99: 'Outro',
+      };
+      return NUM_MAP[raw] ?? String(raw);
+    }
+    return String(raw);
+  };
+
   return (
     <Box sx={{ bgcolor: '#f5f7fb', height: '100%' }}>
       <Container
@@ -201,20 +261,28 @@ export default function DashboardPage() {
                     Despesas por Categoria
                   </Typography>
                   {data.categoriasDespesas.length > 0 ? (
-                    <PieChart
-                      series={[
-                        {
-                          data: data.categoriasDespesas,
-                          innerRadius: 30,
-                          outerRadius: 100,
-                          paddingAngle: 2,
-                          cornerRadius: 4,
-                          highlightScope: { fade: 'global', highlight: 'item' },
-                        },
-                      ]}
-                      height={300}
-                      margin={{ top: 20, bottom: 20 }}
-                    />
+                    (() => {
+                      const categoriasDespesas = data.categoriasDespesas.map((c) => ({
+                        ...c,
+                        label: mapCategoryToLabel(c.label),
+                      }));
+                      return (
+                        <PieChart
+                          series={[
+                            {
+                              data: categoriasDespesas,
+                              innerRadius: 30,
+                              outerRadius: 100,
+                              paddingAngle: 2,
+                              cornerRadius: 4,
+                              highlightScope: { fade: 'global', highlight: 'item' },
+                            },
+                          ]}
+                          height={300}
+                          margin={{ top: 20, bottom: 20 }}
+                        />
+                      );
+                    })()
                   ) : (
                     <Typography color="text.secondary" sx={{ textAlign: 'center', mt: 8 }}>
                       Nenhuma despesa registrada no período

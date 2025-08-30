@@ -22,6 +22,7 @@ import {
 import { MoreVert as MoreVertIcon } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { ImportExportButtons } from '@/components/movements/ImportExportButtons';
+import { MovementForm } from '@/components/movements/MovementForm';
 // Hook de debounce personalizado
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -61,6 +62,68 @@ const transactionSchema = z.object({
 type TransactionFormData = z.infer<typeof transactionSchema>;
 
 export default function DespesasPage() {
+  // helpers: normalize category/activity to symbol strings expected by backend
+  const normalizeCategoryToSymbol = (raw: unknown): string => {
+    if (!raw && raw !== 0) return '';
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      const symbols = ['food', 'transport', 'internet', 'lodging', 'marketing', 'rent', 'supplies', 'education', 'health', 'personal', 'other'];
+      if (symbols.includes(s)) return s;
+      const MAP: Record<string, string> = {
+        'Alimentação': 'food',
+        'Transporte': 'transport',
+        'Internet': 'internet',
+        'Hospedagem': 'lodging',
+        'Marketing': 'marketing',
+        'Aluguel': 'rent',
+        'Materiais': 'supplies',
+        'Educação': 'education',
+        'Saúde': 'health',
+        'Pessoal': 'personal',
+        'Outro': 'other',
+      };
+      return MAP[s] ?? s;
+    }
+    if (typeof raw === 'number') {
+      const NUM_MAP: Record<number, string> = {
+        0: 'food',
+        1: 'transport',
+        2: 'internet',
+        3: 'lodging',
+        4: 'marketing',
+        5: 'rent',
+        6: 'supplies',
+        7: 'education',
+        8: 'health',
+        9: 'personal',
+        99: 'other',
+      };
+      return NUM_MAP[raw] ?? String(raw);
+    }
+    return '';
+  };
+
+  const normalizeActivityToSymbol = (raw: unknown): string => {
+    if (raw === undefined || raw === null || raw === '') return '';
+    if (typeof raw === 'string') {
+      const s = raw.trim().toLowerCase();
+      if (['commerce', 'transport', 'services', 'service'].includes(s)) return s === 'service' ? 'services' : s;
+      // fallback from translated labels
+      if (s.includes('comércio') || s.includes('comercio') || s.includes('comerc')) return 'commerce';
+      if (s.includes('transporte') || s.includes('transport')) return 'transport';
+      if (s.includes('serviços') || s.includes('servicos') || s.includes('servic')) return 'services';
+      if (/^\d+$/.test(s)) {
+        // numeric codes 0/1/2 -> map
+        const n = Number(s);
+        return n === 0 ? 'commerce' : n === 1 ? 'transport' : n === 2 ? 'services' : '';
+      }
+      return s;
+    }
+    if (typeof raw === 'number') {
+      return raw === 0 ? 'commerce' : raw === 1 ? 'transport' : raw === 2 ? 'services' : '';
+    }
+    return '';
+  };
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [despesas, setDespesas] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,6 +168,10 @@ export default function DespesasPage() {
     loadDespesas();
   }, [loadDespesas]);
 
+  useEffect(() => {
+    loadDespesas();
+  }, [loadDespesas]);
+
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
   });
@@ -119,11 +186,12 @@ export default function DespesasPage() {
       description: data.description,
       amount: data.value,
       movement_type: 'expense',
-      category: data.category,
+      // send category as symbol
+      category: normalizeCategoryToSymbol(data.category),
       date: formattedDate,
       // only allowed for expenses as per API
       ...(data.is_business !== undefined ? { is_business: data.is_business } : {}),
-      ...(data.activity_kind !== undefined ? { activity_kind: data.activity_kind } : {}),
+      ...(data.activity_kind !== undefined ? { activity_kind: normalizeActivityToSymbol(data.activity_kind) } : {}),
     };
     try {
       await createMovement(movement);
@@ -158,7 +226,30 @@ export default function DespesasPage() {
     {
       field: 'category',
       headerName: 'Categoria',
-      width: 150
+      width: 150,
+      renderCell: (params) => {
+        const row = params.row as Record<string, unknown>;
+        const catText = (row['category_text'] ?? row['categoryText'] ?? row['categoryLabel'] ?? row['categoria_text']) as string | undefined;
+        if (catText && typeof catText === 'string') return catText;
+        const raw = row['category'] ?? row['categoria'];
+        if (typeof raw === 'string') return raw;
+        if (typeof raw === 'number') {
+          const CATEGORY_MAP: Record<number, string> = {
+            0: 'Alimentação',
+            1: 'Transporte',
+            2: 'Internet',
+            3: 'Hospedagem',
+            4: 'Marketing',
+            5: 'Aluguel',
+            6: 'Materiais',
+            7: 'Educação',
+            8: 'Saúde',
+            99: 'Outro',
+          };
+          return CATEGORY_MAP[raw] ?? String(raw);
+        }
+        return '';
+      }
     },
     {
       field: 'amount',
@@ -237,36 +328,52 @@ export default function DespesasPage() {
       // preencher campos com várias possíveis chaves (snake_case / camelCase)
       const rec = selectedItem as unknown as Record<string, unknown>;
       const amt = (rec['amount'] ?? rec['value'] ?? 0) as number;
-      const cat = String(rec['category'] ?? rec['categoria'] ?? '');
       const desc = String(rec['title'] ?? rec['description'] ?? '');
       const dt = String(rec['date'] ?? rec['createdAt'] ?? '');
       const isBiz = Boolean(rec['is_business'] ?? rec['isBusiness'] ?? false);
-      const rawAct = rec['activity_kind'] ?? rec['activityKind'] ?? rec['activityKindText'] ?? rec['activity_kind_text'] ?? rec['activity_kind_text'] ?? '';
 
-      // map textual activity kinds (pt/en) to numeric codes expected by the select
+      // activity_kind: prefer english symbol or *_text translation fields
+      const rawAct = rec['activity_kind'] ?? rec['activityKind'] ?? rec['activity_kind_text'] ?? rec['activityKindText'] ?? '';
+      // map activity to symbol strings: 'commerce' | 'transport' | 'services'
       const mapActivityKind = (raw: unknown): TransactionFormData['activity_kind'] => {
         if (raw === undefined || raw === null || raw === '') return '';
-        if (typeof raw === 'number') return raw;
         if (typeof raw === 'string') {
           const s = raw.trim();
-          if (/^\d+$/.test(s)) return Number(s);
-          const lower = s.toLocaleLowerCase('pt-BR');
-          // Portuguese matches
-          if (lower.includes('comércio') || lower.includes('comercio') || lower.includes('comerc')) return 0;
-          if (lower.includes('transporte') || lower.includes('transport')) return 1;
-          if (lower.includes('serviços') || lower.includes('servicos') || lower.includes('servic')) return 2;
-          // English matches
-          if (lower.includes('commerce') || lower.includes('trade')) return 0;
-          if (lower.includes('transport')) return 1;
-          if (lower.includes('service') || lower.includes('services')) return 2;
+          if (/^\d+$/.test(s)) {
+            // numeric string -> map via number
+            const n = Number(s);
+            return n === 0 ? 'commerce' : n === 1 ? 'transport' : n === 2 ? 'services' : '';
+          }
+          const lower = s.toLowerCase();
+          if (lower === 'commerce') return 'commerce';
+          if (lower === 'transport') return 'transport';
+          if (lower === 'services' || lower === 'service') return 'services';
+          // fallback PT text
+          if (lower.includes('comércio') || lower.includes('comercio') || lower.includes('comerc')) return 'commerce';
+          if (lower.includes('transporte') || lower.includes('transport')) return 'transport';
+          if (lower.includes('serviços') || lower.includes('servicos') || lower.includes('servic')) return 'services';
+          return '';
+        }
+        if (typeof raw === 'number') {
+          const n = raw as number;
+          return n === 0 ? 'commerce' : n === 1 ? 'transport' : n === 2 ? 'services' : '';
         }
         return '';
       };
-
       const actKind = mapActivityKind(rawAct);
 
+      // category: prefer translated label fields (category_text) but store symbol in form
+      const categoryText = rec['category_text'] ?? rec['categoryText'] ?? rec['categoryLabel'] ?? rec['categoria_text'] ?? rec['categoriaText'];
+      let catSymbol = '';
+      if (typeof categoryText === 'string' && categoryText.trim() !== '') {
+        catSymbol = normalizeCategoryToSymbol(categoryText);
+      } else {
+        const rawCat = rec['category'] ?? rec['categoria'] ?? rec['category_key'] ?? rec['categoryKey'];
+        catSymbol = normalizeCategoryToSymbol(rawCat);
+      }
+
       setEditValue('value', amt);
-      setEditValue('category', cat);
+      setEditValue('category', catSymbol);
       setEditValue('description', desc);
       setEditValue('date', dt);
       setEditValue('is_business', isBiz);
@@ -307,10 +414,10 @@ export default function DespesasPage() {
       description: data.description,
       amount: data.value,
       movement_type: 'expense',
-      category: data.category,
+      category: normalizeCategoryToSymbol(data.category),
       date: formattedDate,
       ...(data.is_business !== undefined ? { is_business: data.is_business } : {}),
-      ...(data.activity_kind !== undefined ? { activity_kind: data.activity_kind } : {}),
+      ...(data.activity_kind !== undefined ? { activity_kind: normalizeActivityToSymbol(data.activity_kind) } : {}),
     };
 
     try {
@@ -775,108 +882,36 @@ export default function DespesasPage() {
               Editar Despesa
             </DialogTitle>
             <DialogContent>
-              <Stack spacing={3} sx={{ mt: 2, minWidth: { sm: '400px' } }}>
-                <TextField
-                  required
-                  fullWidth
-                  label="Valor"
-                  type="number"
-                  inputProps={{
-                    step: '0.01',
-                    min: '0',
-                  }}
-                  {...registerEdit('value', { valueAsNumber: true })}
-                  error={!!errorsEdit?.value}
-                  helperText={errorsEdit?.value?.message}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#667eea',
-                      },
-                    }
-                  }}
-                />
-                <TextField
-                  required
-                  fullWidth
-                  label="Categoria"
-                  {...registerEdit('category')}
-                  error={!!errorsEdit?.category}
-                  helperText={errorsEdit?.category?.message}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#667eea',
-                      },
-                    }
-                  }}
-                />
-                <TextField
-                  required
-                  fullWidth
-                  label="Descrição"
-                  {...registerEdit('description')}
-                  error={!!errorsEdit?.description}
-                  helperText={errorsEdit?.description?.message}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#667eea',
-                      },
-                    }
-                  }}
-                />
-                <TextField
-                  required
-                  fullWidth
-                  type="date"
-                  label="Data"
-                  InputLabelProps={{ shrink: true }}
-                  {...registerEdit('date')}
-                  error={!!errorsEdit?.date}
-                  helperText={errorsEdit?.date?.message}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#667eea',
-                      },
-                    }
-                  }}
-                />
-                <Controller
-                  name="is_business"
-                  control={controlEdit}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={<Checkbox {...field} checked={Boolean(field.value)} />}
-                      label="Relacionado ao meu negócio (IRPF - MEI)"
-                    />
-                  )}
-                />
-                <Controller
-                  name="activity_kind"
-                  control={controlEdit}
-                  render={({ field }) => (
-                    isBusinessEdit ? (
-                      <TextField
-                        select
-                        label="Tipo de Atividade (MEI)"
-                        {...field}
-                        sx={{ minWidth: 200 }}
-                      >
-                        <MenuItem value="">Nenhum</MenuItem>
-                        <MenuItem value={0}>Comércio</MenuItem>
-                        <MenuItem value={1}>Transporte</MenuItem>
-                        <MenuItem value={2}>Serviços</MenuItem>
-                      </TextField>
-                    ) : (<></>)
-                  )}
-                />
-              </Stack>
+              <MovementForm register={registerEdit} errors={errorsEdit} control={controlEdit} />
+              <Controller
+                name="is_business"
+                control={controlEdit}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={Boolean(field.value)} />}
+                    label="Relacionado ao meu negócio (IRPF - MEI)"
+                  />
+                )}
+              />
+              <Controller
+                name="activity_kind"
+                control={controlEdit}
+                render={({ field }) => (
+                  isBusinessEdit ? (
+                    <TextField
+                      select
+                      label="Tipo de Atividade (MEI)"
+                      {...field}
+                      sx={{ minWidth: 200 }}
+                    >
+                      <MenuItem value="">Nenhum</MenuItem>
+                      <MenuItem value="commerce">Comércio</MenuItem>
+                      <MenuItem value="transport">Transporte</MenuItem>
+                      <MenuItem value="services">Serviços</MenuItem>
+                    </TextField>
+                  ) : (<></>)
+                )}
+              />
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
               <Button

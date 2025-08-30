@@ -46,6 +46,47 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const ReceitasPage: React.FC = () => {
+  // helper: map display label or numeric to symbol expected by backend
+  const normalizeCategoryToSymbol = (raw: unknown): string => {
+    if (!raw && raw !== 0) return '';
+    if (typeof raw === 'string') {
+      // if it's already a symbol like 'food' return
+      const s = raw.trim();
+      const symbols = ['food', 'transport', 'internet', 'lodging', 'marketing', 'rent', 'supplies', 'education', 'health', 'personal', 'other'];
+      if (symbols.includes(s)) return s;
+      // could be a translated label; try reverse map
+      const MAP: Record<string, string> = {
+        'Alimentação': 'food',
+        'Transporte': 'transport',
+        'Internet': 'internet',
+        'Hospedagem': 'lodging',
+        'Marketing': 'marketing',
+        'Aluguel': 'rent',
+        'Materiais': 'supplies',
+        'Educação': 'education',
+        'Saúde': 'health',
+        'Pessoal': 'personal',
+        'Outro': 'other',
+      };
+      return MAP[s] ?? s;
+    }
+    if (typeof raw === 'number') {
+      const NUM_MAP: Record<number, string> = {
+        0: 'food',
+        1: 'transport',
+        2: 'internet',
+        3: 'lodging',
+        4: 'marketing',
+        5: 'rent',
+        6: 'supplies',
+        7: 'education',
+        8: 'health',
+        99: 'other',
+      };
+      return NUM_MAP[raw] ?? String(raw);
+    }
+    return '';
+  };
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [receitas, setReceitas] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +120,7 @@ const ReceitasPage: React.FC = () => {
       setTotalPages(res.meta.pagination.totalPages);
       setTotalReceitas(res.meta.totalAmount);
       setError(null);
-    } catch (error) {
+    } catch {
       setError('Erro ao carregar receitas');
     } finally {
       setLoading(false);
@@ -90,7 +131,7 @@ const ReceitasPage: React.FC = () => {
     loadReceitas();
   }, [loadReceitas]);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<TransactionFormData>({
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
   });
 
@@ -105,7 +146,9 @@ const ReceitasPage: React.FC = () => {
       date: formattedDate,
     };
     try {
-      await createMovement(movement);
+      // ensure category is sent as symbol (if category_text was used in UI, backend expects symbol)
+      const payload = { ...movement, category: normalizeCategoryToSymbol(movement.category) } as MovementCreateRequest;
+      await createMovement(payload);
       // Recarregar receitas após criar
       await loadReceitas();
       setIsDialogOpen(false);
@@ -136,7 +179,31 @@ const ReceitasPage: React.FC = () => {
     {
       field: 'category',
       headerName: 'Categoria',
-      width: 150
+      width: 150,
+      renderCell: (params) => {
+        const row = params.row as Record<string, unknown>;
+        const catText = (row['category_text'] ?? row['categoryText'] ?? row['categoryLabel'] ?? row['categoria_text']) as string | undefined;
+        if (catText && typeof catText === 'string') return catText;
+        // fallback to numeric enum or raw category
+        const raw = row['category'] ?? row['categoria'];
+        if (typeof raw === 'string') return raw;
+        if (typeof raw === 'number') {
+          const CATEGORY_MAP: Record<number, string> = {
+            0: 'Alimentação',
+            1: 'Transporte',
+            2: 'Internet',
+            3: 'Hospedagem',
+            4: 'Marketing',
+            5: 'Aluguel',
+            6: 'Materiais',
+            7: 'Educação',
+            8: 'Saúde',
+            99: 'Outro',
+          };
+          return CATEGORY_MAP[raw] ?? String(raw);
+        }
+        return '';
+      }
     },
     {
       field: 'amount',
@@ -181,6 +248,7 @@ const ReceitasPage: React.FC = () => {
     handleSubmit: handleSubmitEdit,
     reset: resetEdit,
     setValue: setEditValue,
+    control: controlEdit,
     formState: { errors: errorsEdit }
   } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
@@ -206,7 +274,11 @@ const ReceitasPage: React.FC = () => {
     if (selectedItem && isEditDialogOpen) {
       resetEdit(); // Limpa o form antes de preenchê-lo
       setEditValue('value', selectedItem.amount);
-      setEditValue('category', selectedItem.category);
+      // prefer category_text but store symbol in form
+      const rec = selectedItem as unknown as Record<string, unknown>;
+      const categoryText = rec['category_text'] ?? rec['categoryText'] ?? rec['categoryLabel'] ?? rec['categoria_text'];
+      const catSymbol = categoryText ? normalizeCategoryToSymbol(categoryText) : normalizeCategoryToSymbol(rec['category'] ?? rec['categoria']);
+      setEditValue('category', catSymbol);
       setEditValue('description', selectedItem.title);
       setEditValue('date', selectedItem.date);
     }
@@ -228,7 +300,7 @@ const ReceitasPage: React.FC = () => {
         await deleteMovement(selectedItem.id);
         await loadReceitas();
         setError(null);
-      } catch (error) {
+      } catch {
         setError('Erro ao excluir receita');
       }
     }
@@ -250,7 +322,8 @@ const ReceitasPage: React.FC = () => {
     };
 
     try {
-      await updateMovement(selectedItem.id, movement);
+      const payload = { ...movement, category: normalizeCategoryToSymbol(movement.category) } as MovementCreateRequest;
+      await updateMovement(selectedItem.id, payload);
       await loadReceitas();
       setIsEditDialogOpen(false);
       setSelectedItem(null);
@@ -480,6 +553,7 @@ const ReceitasPage: React.FC = () => {
           <MovementForm
             register={register}
             errors={errors}
+            control={control}
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
@@ -570,6 +644,7 @@ const ReceitasPage: React.FC = () => {
             <MovementForm
               register={registerEdit}
               errors={errorsEdit}
+              control={controlEdit}
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
