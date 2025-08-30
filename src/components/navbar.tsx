@@ -46,6 +46,7 @@ export function NavBar() {
     { text: 'Assinaturas', icon: <Receipt />, href: '/assinaturas' },
     { text: 'Receitas', icon: <MonetizationOn />, href: '/receitas' },
     { text: 'Despesas', icon: <Receipt />, href: '/despesas' },
+    { text: 'IRPF', icon: <Receipt />, href: '/iprf' },
     { text: 'Relatórios', icon: <PieChart />, href: '/relatorios' },
   ];
 

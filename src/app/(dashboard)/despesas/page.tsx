@@ -44,7 +44,7 @@ import { Movement, MovementCreateRequest } from '@/types/movement';
 // Movement may have optional IRPF fields from the API
 type MaybeMovement = Movement & { is_business?: boolean; activity_kind?: number };
 import { Add as AddIcon } from '@mui/icons-material';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -108,6 +108,9 @@ export default function DespesasPage() {
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
   });
+
+  // watch para exibir campo activity_kind somente quando is_business estiver marcado
+  const isBusinessCreate = useWatch({ control, name: 'is_business' });
 
   const onSubmit = async (data: TransactionFormData) => {
     const formattedDate = data.date ? new Date(data.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
@@ -225,15 +228,49 @@ export default function DespesasPage() {
     }
   });
 
+  // watch para edição
+  const isBusinessEdit = useWatch({ control: controlEdit, name: 'is_business' });
+
   useEffect(() => {
     if (selectedItem && isEditDialogOpen) {
       resetEdit(); // Limpa o form antes de preenchê-lo
-      setEditValue('value', selectedItem.amount as number);
-      setEditValue('category', selectedItem.category as string);
-      setEditValue('description', selectedItem.title as string);
-      setEditValue('date', selectedItem.date as string);
-      setEditValue('is_business', Boolean(selectedItem.is_business));
-      setEditValue('activity_kind', selectedItem.activity_kind ?? '');
+      // preencher campos com várias possíveis chaves (snake_case / camelCase)
+      const rec = selectedItem as unknown as Record<string, unknown>;
+      const amt = (rec['amount'] ?? rec['value'] ?? 0) as number;
+      const cat = String(rec['category'] ?? rec['categoria'] ?? '');
+      const desc = String(rec['title'] ?? rec['description'] ?? '');
+      const dt = String(rec['date'] ?? rec['createdAt'] ?? '');
+      const isBiz = Boolean(rec['is_business'] ?? rec['isBusiness'] ?? false);
+      const rawAct = rec['activity_kind'] ?? rec['activityKind'] ?? rec['activityKindText'] ?? rec['activity_kind_text'] ?? rec['activity_kind_text'] ?? '';
+
+      // map textual activity kinds (pt/en) to numeric codes expected by the select
+      const mapActivityKind = (raw: unknown): TransactionFormData['activity_kind'] => {
+        if (raw === undefined || raw === null || raw === '') return '';
+        if (typeof raw === 'number') return raw;
+        if (typeof raw === 'string') {
+          const s = raw.trim();
+          if (/^\d+$/.test(s)) return Number(s);
+          const lower = s.toLocaleLowerCase('pt-BR');
+          // Portuguese matches
+          if (lower.includes('comércio') || lower.includes('comercio') || lower.includes('comerc')) return 0;
+          if (lower.includes('transporte') || lower.includes('transport')) return 1;
+          if (lower.includes('serviços') || lower.includes('servicos') || lower.includes('servic')) return 2;
+          // English matches
+          if (lower.includes('commerce') || lower.includes('trade')) return 0;
+          if (lower.includes('transport')) return 1;
+          if (lower.includes('service') || lower.includes('services')) return 2;
+        }
+        return '';
+      };
+
+      const actKind = mapActivityKind(rawAct);
+
+      setEditValue('value', amt);
+      setEditValue('category', cat);
+      setEditValue('description', desc);
+      setEditValue('date', dt);
+      setEditValue('is_business', isBiz);
+      setEditValue('activity_kind', (actKind as unknown) as TransactionFormData['activity_kind'] ?? '');
     }
   }, [selectedItem, isEditDialogOpen, setEditValue, resetEdit]);
 
@@ -635,17 +672,20 @@ export default function DespesasPage() {
                 name="activity_kind"
                 control={control}
                 render={({ field }) => (
-                  <TextField
-                    select
-                    label="Tipo de Atividade (MEI)"
-                    {...field}
-                    sx={{ minWidth: 200 }}
-                  >
-                    <MenuItem value="">Nenhum</MenuItem>
-                    <MenuItem value={0}>Comércio</MenuItem>
-                    <MenuItem value={1}>Transporte</MenuItem>
-                    <MenuItem value={2}>Serviços</MenuItem>
-                  </TextField>
+                  // mostrar apenas se marcado como relacionado ao negócio
+                  isBusinessCreate ? (
+                    <TextField
+                      select
+                      label="Tipo de Atividade (MEI)"
+                      {...field}
+                      sx={{ minWidth: 200 }}
+                    >
+                      <MenuItem value="">Nenhum</MenuItem>
+                      <MenuItem value={0}>Comércio</MenuItem>
+                      <MenuItem value={1}>Transporte</MenuItem>
+                      <MenuItem value={2}>Serviços</MenuItem>
+                    </TextField>
+                  ) : (<></>)
                 )}
               />
             </Stack>
@@ -821,17 +861,19 @@ export default function DespesasPage() {
                   name="activity_kind"
                   control={controlEdit}
                   render={({ field }) => (
-                    <TextField
-                      select
-                      label="Tipo de Atividade (MEI)"
-                      {...field}
-                      sx={{ minWidth: 200 }}
-                    >
-                      <MenuItem value="">Nenhum</MenuItem>
-                      <MenuItem value={0}>Comércio</MenuItem>
-                      <MenuItem value={1}>Transporte</MenuItem>
-                      <MenuItem value={2}>Serviços</MenuItem>
-                    </TextField>
+                    isBusinessEdit ? (
+                      <TextField
+                        select
+                        label="Tipo de Atividade (MEI)"
+                        {...field}
+                        sx={{ minWidth: 200 }}
+                      >
+                        <MenuItem value="">Nenhum</MenuItem>
+                        <MenuItem value={0}>Comércio</MenuItem>
+                        <MenuItem value={1}>Transporte</MenuItem>
+                        <MenuItem value={2}>Serviços</MenuItem>
+                      </TextField>
+                    ) : (<></>)
                   )}
                 />
               </Stack>
