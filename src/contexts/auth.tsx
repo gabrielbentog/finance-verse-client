@@ -53,7 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // O AuthService já salvou o token em cookie e os dados do usuário no localStorage
       const userData = response.data.data;
+      console.log(response)
       setUser(userData);
+      try {
+        localStorage.setItem('user', JSON.stringify(userData));
+      } catch (e) {
+        console.warn('Não foi possível salvar user no localStorage após login', e);
+      }
       
       // Redirecionar para o dashboard após o login bem-sucedido
       router.push('/dashboard');
