@@ -4,7 +4,7 @@ export interface User {
   name: string;
   email: string;
   createdAt?: string;
-  avatar_url?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface LoginCredentials {

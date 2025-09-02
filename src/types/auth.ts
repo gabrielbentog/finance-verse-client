@@ -28,7 +28,7 @@ export interface UserData {
   id: number;
   email: string;
   name: string;
-  avatar_url: string | null;
+  avatarUrl: string | null;
 }
 
 // Headers de autenticação

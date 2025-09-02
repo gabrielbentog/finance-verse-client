@@ -30,6 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useThemeStore } from '@/store/themeStore';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/auth';
 
@@ -40,6 +41,7 @@ export function NavBar() {
   const { isDarkMode, toggleTheme } = useThemeStore();
   const pathname = usePathname();
   const { logout, user } = useAuth();
+  const router = useRouter();
 
   const menuItems = [
     { text: 'Dashboard', icon: <Dashboard />, href: '/dashboard' },
@@ -162,15 +164,20 @@ export function NavBar() {
             borderColor: 'divider',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+            onClick={() => router.push('/perfil')}
+            title="Ver perfil"
+          >
             <Avatar
+              src={user?.avatarUrl || undefined}
               sx={{
-                width: 36,
-                height: 36,
-                background: 'linear-gradient(90deg, #667eea, #764ba2)',
+              width: 36,
+              height: 36,
+              background: !user?.avatarUrl ? 'linear-gradient(90deg, #667eea, #764ba2)' : undefined,
               }}
             >
-              {user?.name?.charAt(0) || 'U'}
+              {!user?.avatarUrl && (user?.name?.charAt(0) || 'U')}
             </Avatar>
             <Box sx={{ ml: 1.5 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
