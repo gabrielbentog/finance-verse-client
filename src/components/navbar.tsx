@@ -181,7 +181,7 @@ export function NavBar() {
             </Avatar>
             <Box sx={{ ml: 1.5 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {user?.name || 'Usuário'}
+                {(user?.name?.slice(0, 13) || 'Usuário') + (user?.name && user.name.length > 18 ? '...' : '')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {user?.email || 'usuario@email.com'}

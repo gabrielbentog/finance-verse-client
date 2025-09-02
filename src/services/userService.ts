@@ -38,7 +38,8 @@ userApi.interceptors.request.use(config => {
 
 export async function updateProfile(payload: { id: number | string; name?: string; email?: string; avatar?: File | null; }): Promise<UserData> {
   const { id, name, email, avatar } = payload;
-  if (avatar) {
+  // If avatar is a File -> send multipart/form-data with the file
+  if (avatar instanceof File) {
     const form = new FormData();
     if (name !== undefined) form.append('user[name]', name);
     if (email !== undefined) form.append('user[email]', email);
@@ -48,16 +49,27 @@ export async function updateProfile(payload: { id: number | string; name?: strin
     // Normalizar campos retornados para o formato usado no frontend
     const normalized: Partial<UserData> = {
       ...(raw || {}),
-      avatarUrl: (raw && (raw.avatarUrl ?? raw.avatarUrl ?? raw.avatar)) ?? null,
+      avatarUrl: (raw && (raw.avatarUrl ?? raw.avatar_url ?? raw.avatar)) ?? null,
+    };
+    return normalized as UserData;
+  }
+  // If avatar is explicitly null -> instruct server to remove avatar
+  if (avatar === null) {
+    const response = await userApi.put(`/users/${id}`, { user: { name, email, avatar: null } });
+    const raw = response.data && response.data.data ? response.data.data : response.data;
+    const normalized: Partial<UserData> = {
+      ...(raw || {}),
+      avatarUrl: (raw && (raw.avatarUrl ?? raw.avatar_url ?? raw.avatar)) ?? null,
     };
     return normalized as UserData;
   }
 
+  // Default: update only name/email
   const response = await userApi.put(`/users/${id}`, { user: { name, email } });
   const raw = response.data && response.data.data ? response.data.data : response.data;
   const normalized: Partial<UserData> = {
     ...(raw || {}),
-    avatarUrl: (raw && (raw.avatarUrl ?? raw.avatarUrl ?? raw.avatar)) ?? null,
+    avatarUrl: (raw && (raw.avatarUrl ?? raw.avatar_url ?? raw.avatar)) ?? null,
   };
   return normalized as UserData;
 }
