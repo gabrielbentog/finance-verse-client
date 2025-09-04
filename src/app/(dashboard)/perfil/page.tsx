@@ -4,6 +4,7 @@ import { Box, Container, Paper, Typography, Avatar, Button, Stack, Chip, IconBut
 import EditIcon from "@mui/icons-material/Edit"
 import { useAuth } from "@/contexts/auth"
 import ProfileEditForm from "@/components/profile/ProfileEditForm"
+import TwoFactorSettings from '@/components/profile/TwoFactor'
 import { useRef, useState } from "react"
 import type { UserData } from "@/types/auth"
 import { updateProfile } from "@/services/userService"
@@ -19,7 +20,7 @@ export default function ProfilePage() {
 
   const handleSaved = (updatedUser: UserData) => {
     try {
-      localStorage.setItem("user", JSON.stringify(updatedUser))
+      (async () => { try { (await import('@/services/userService')).saveUserToStorage(updatedUser as unknown as Record<string, unknown>) } catch {} })()
     } catch {}
     if (updateUser) updateUser(updatedUser)
     setEditing(false)
@@ -218,7 +219,7 @@ export default function ProfilePage() {
                           try {
                             const updated = await updateProfile({ id: user.id, avatar: null })
                             try {
-                              localStorage.setItem('user', JSON.stringify(updated))
+                              (await import('@/services/userService')).saveUserToStorage(updated as unknown as Record<string, unknown>)
                             } catch {}
                             if (updateUser) updateUser(updated)
                           } catch (err) {
@@ -238,6 +239,21 @@ export default function ProfilePage() {
               </Box>
             </Box>
           </Stack>
+        </Paper>
+
+        {/* Segurança: 2FA */}
+        <Paper
+          elevation={0}
+          sx={{
+            p: 4,
+            borderRadius: 3,
+            mb: 3,
+            border: "1px solid",
+            borderColor: "grey.200",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          }}
+        >
+          <TwoFactorSettings />
         </Paper>
 
         {/* Corpo – alterna entre texto informativo e formulário (sem avatar dentro do form) */}

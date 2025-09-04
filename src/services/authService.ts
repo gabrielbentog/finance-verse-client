@@ -53,23 +53,23 @@ const deleteCookie = (name: string) => {
 export class AuthService {
 
   // Login do usuário
-  static async login(email: string, password: string): Promise<{ data: AuthResponse; token: string }> {
+  static async login(email: string, password: string): Promise<{ data: Record<string, unknown> | null; token: string | null; }> {
     try {
       const credentials: AuthCredentials = {
         authentication: { email, password }
       };
 
-      const response: AxiosResponse<AuthResponse> = await authApi.post('/authenticate', credentials);
+      const response = await authApi.post('/authenticate', credentials);
 
-      // Extrair o token de autorização
-      const authToken = response.headers['authorization'];
+      // Extrair o token de autorização (se presente)
+      const authToken = response.headers['authorization'] ?? null;
 
-      // Guardar o token em cookie
+      // Se o backend retornou um token de sessão direto, salvar no cookie
       if (authToken) {
         setCookie(TOKEN_COOKIE_NAME, authToken);
       }
 
-      // Guardar dados do usuário no localStorage
+      // Caso a resposta contenha dados de usuário (login completo), salvar no localStorage
       if (response.data && response.data.data) {
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.data.data));
       }
@@ -176,3 +176,45 @@ authApi.interceptors.request.use(config => {
 });
 
 export default authApi;
+
+// Endpoint to verify two-factor during login
+// Verificação durante login usando temp_auth_token
+export async function verifyTwoFactorDuringLogin(tempAuthToken: string, code: string): Promise<import('@/types/auth').UserData | null> {
+  // o backend espera o campo `temp_auth_token`; aceitar também tempAuthToken de callers
+  const payload = { temp_auth_token: tempAuthToken, tempAuthToken: tempAuthToken, tempToken: tempAuthToken, code };
+  const response = await authApi.post(`/verify_2fa`, payload);
+
+  // extrair possível objeto user (pode vir em different shapes)
+  const raw = response.data && response.data.data ? response.data.data : response.data;
+  let userObj: Record<string, unknown> | null = null;
+
+  if (raw && typeof raw === 'object') {
+    // se raw conter user: { ... }
+    if ('user' in (raw as Record<string, unknown>) && typeof (raw as Record<string, unknown>)['user'] === 'object') {
+      userObj = (raw as Record<string, unknown>)['user'] as Record<string, unknown>;
+    } else if ((raw as Record<string, unknown>)['id']) {
+      // raw é o próprio user
+      userObj = raw as Record<string, unknown>;
+    }
+  }
+
+  // Se o backend retornar token nos headers, salve o cookie
+  const authToken = response.headers['authorization'] ?? null;
+  if (authToken) setCookie(TOKEN_COOKIE_NAME, authToken);
+
+  // Caso tenhamos um userObj, normalize e salve em localStorage
+  if (userObj) {
+    const normalized: UserData = {
+      id: String(userObj['id']),
+      email: typeof userObj['email'] === 'string' ? (userObj['email'] as string) : '',
+      name: typeof userObj['name'] === 'string' ? (userObj['name'] as string) : '',
+      avatarUrl: (userObj['avatar_url'] || userObj['avatarUrl'] || userObj['avatar']) as string | null || null,
+      twoFactorEnabled: Boolean(userObj['two_factor_enabled'] || userObj['twoFactorEnabled'] || userObj['two_factor_enabled?']),
+    };
+
+    try { localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
+    return normalized;
+  }
+
+  return null;
+}

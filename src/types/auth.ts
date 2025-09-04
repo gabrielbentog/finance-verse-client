@@ -25,10 +25,11 @@ export interface AuthResponse {
 
 // Dados do usuário
 export interface UserData {
-  id: number;
+  id: string;
   email: string;
   name: string;
   avatarUrl: string | null;
+  twoFactorEnabled?: boolean;
 }
 
 // Headers de autenticação

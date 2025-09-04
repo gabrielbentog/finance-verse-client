@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: UserData | null;
-  login: (email: string, password: string) => Promise<UserData>;
+  login: (email: string, password: string) => Promise<UserData | Record<string, unknown>>;
+  // quando 2FA é necessário, o login pode retornar um payload bruto contendo
+  // { two_factor_required: true, temp_auth_token: '...' }
+  // por isso permitimos também Record<string, unknown>
+  // (consumidor pode checar e tratar a etapa adicional)
+  
   register: (name: string, email: string, password: string) => Promise<UserData>;
   logout: () => void;
   isLoading: boolean;
@@ -51,21 +56,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       const response = await AuthService.login(email, password);
-      
-      // O AuthService já salvou o token em cookie e os dados do usuário no localStorage
-      const userData = response.data.data;
-      console.log(response)
-      setUser(userData);
-      try {
-        localStorage.setItem('user', JSON.stringify(userData));
-      } catch (e) {
-        console.warn('Não foi possível salvar user no localStorage após login', e);
+
+      // Se o backend indicar que 2FA é necessário, retorne o payload bruto
+      // Normalizar o corpo da resposta (alguns backends retornam { data: { ... } } )
+      const maybe = response.data as Record<string, unknown> | null;
+      const body = (maybe && typeof maybe === 'object' && maybe['data'] && typeof maybe['data'] === 'object') ? (maybe['data'] as Record<string, unknown>) : (maybe as Record<string, unknown>);
+
+      // Detectar variantes de resposta que indicam 2FA: campo booleano ou status string
+      const status = typeof body?.['status'] === 'string' ? (body['status'] as string) : undefined;
+      const twoReq = status === '2fa_required' || body?.['two_factor_required'] === true || body?.['status'] === 'two_factor_required';
+      if (twoReq) {
+        // Retorna o payload (original) para que a página de login trate a etapa 2FA
+        return response.data as unknown as Record<string, unknown>;
       }
-      
+
+      // Caso contrário, comportamento normal: salvar user e redirecionar
+      const userData = response.data && (response.data as Record<string, unknown>)['data'] ? (response.data as Record<string, unknown>)['data'] as UserData : null;
+      if (userData) {
+        setUser(userData);
+        try {
+          (await import('@/services/userService')).saveUserToStorage(userData as unknown as Record<string, unknown>)
+        } catch (e) {
+          console.warn('Não foi possível salvar user no localStorage após login', e);
+        }
+      }
+
       // Redirecionar para o dashboard após o login bem-sucedido
       router.push('/dashboard');
-      
-      return userData;
+
+      return userData as UserData;
     } catch (err) {
       if (typeof err === 'object' && err !== null && 'error' in err) {
         setError((err as { error: string }).error);
@@ -86,9 +105,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await AuthService.register(name, email, password);
       
       // O AuthService já salvou o token em cookie e os dados do usuário no localStorage
-      const userData = response.data.data;
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
+  const userData = response.data.data;
+  setUser(userData);
+  try { (await import('@/services/userService')).saveUserToStorage(userData as unknown as Record<string, unknown>) } catch {}
       // Redirecionar para o dashboard após o registro bem-sucedido
       router.push('/dashboard');
       
@@ -111,8 +130,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
+  const persistUser = (u: UserData | null) => {
+    setUser(u)
+    try {
+      if (u) (async () => { try { (await import('@/services/userService')).saveUserToStorage(u as unknown as Record<string, unknown>) } catch {} })()
+      else localStorage.removeItem('user')
+    } catch (e) {
+      console.warn('Não foi possível persistir user no localStorage via updateUser', e)
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading, error, updateUser: setUser }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading, error, updateUser: persistUser }}>
       {children}
     </AuthContext.Provider>
   );

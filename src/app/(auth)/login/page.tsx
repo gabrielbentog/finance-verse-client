@@ -8,12 +8,15 @@ import {
   TextField,
   Typography,
   CircularProgress,
+  Dialog,
+  Stack,
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth';
+import { verifyTwoFactorDuringLogin } from '@/services/authService'
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -31,14 +34,40 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false)
+  const [code, setCode] = useState('')
+  const [tempAuthToken, setTempAuthToken] = useState<string | null>(null)
+
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     setError('');
     
     try {
       // O context de autenticação agora já redireciona para o dashboard
-      await login(data.email, data.password);
-      // Não precisamos mais redirecionar aqui, pois o contexto já faz isso
+      const resp = await login(data.email, data.password);
+      // Caso o backend informe que 2FA é necessário, ativa a etapa adicional
+      // Normaliza diferentes formatos de resposta e nomes de campo (ex: tempAuthToken / temp_auth_token)
+      const maybe = resp as unknown as Record<string, unknown>;
+      // normalize body that may be wrapped in data
+      const respBody = (maybe && typeof maybe === 'object' && maybe['data'] && typeof maybe['data'] === 'object') ? (maybe['data'] as Record<string, unknown>) : (maybe as Record<string, unknown>);
+      const status = typeof respBody?.['status'] === 'string' ? (respBody['status'] as string) : undefined;
+      const twoReq = status === '2fa_required' || respBody?.['two_factor_required'] === true || respBody?.['status'] === 'two_factor_required';
+      if (twoReq) {
+        // DEBUG: log da resposta para inspecionar formato exato (remover após verificação)
+        try { console.debug('2FA required response payload:', { maybe, respBody }); } catch {}
+        // capture temp token from multiple possible locations / key names
+        const temp = (respBody && (respBody['tempAuthToken'] as string))
+          || (respBody && (respBody['temp_auth_token'] as string))
+          || (respBody && (respBody['tempToken'] as string))
+          || (maybe && (maybe['tempAuthToken'] as string))
+          || (maybe && (maybe['temp_auth_token'] as string))
+          || null;
+        setTempAuthToken(temp);
+        setTwoFactorRequired(true);
+        setIsSubmitting(false);
+        return;
+      }
+      // se não, o AuthContext já cuida do redirecionamento
     } catch (err) {
       console.error('Erro ao fazer login:', err);
       
@@ -51,6 +80,24 @@ export default function LoginPage() {
       setIsSubmitting(false);
     }
   };
+
+  const submit2fa = async () => {
+    if (!tempAuthToken) {
+      setError('Token temporário ausente. Refaça o login.');
+      return;
+    }
+    setIsSubmitting(true)
+    try {
+      await verifyTwoFactorDuringLogin(tempAuthToken, code)
+      // sucesso: backend validou e enviou cookie/token, agora podemos redirecionar
+      window.location.href = '/dashboard'
+    } catch (err) {
+      console.error('Erro no 2FA', err)
+      setError('Código inválido ou expirado')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <Box
@@ -175,7 +222,6 @@ export default function LoginPage() {
                   <CircularProgress size={24} color="inherit" />
                 ) : 'Entrar'}
               </Button>
-
               <Button
                 component={Link}
                 href="/register"
@@ -194,6 +240,41 @@ export default function LoginPage() {
               >
                 Não tem uma conta? <Box component="span" sx={{ color: '#667eea', ml: 0.5 }}>Cadastre-se</Box>
               </Button>
+
+              {/* Dialog para verificação 2FA */}
+              <Dialog open={twoFactorRequired} onClose={() => { setTwoFactorRequired(false); setTempAuthToken(null); }} fullWidth maxWidth="xs">
+                <Box sx={{ p: 2 }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>Verificação em dois fatores</Typography>
+                  <Typography variant="body2" color="text.secondary">Informe o código gerado pelo seu app autenticador</Typography>
+                  <TextField
+                    label="Código 2FA"
+                    fullWidth
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    disabled={isSubmitting}
+                    sx={{ mt: 2 }}
+                    autoFocus
+                  />
+                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => { setTwoFactorRequired(false); setTempAuthToken(null); setCode('') }}
+                      disabled={isSubmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      fullWidth
+                      onClick={submit2fa}
+                      disabled={isSubmitting || code.length === 0}
+                      sx={{ background: 'linear-gradient(90deg, #667eea, #764ba2)', color: 'white' }}
+                    >
+                      {isSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Verificar'}
+                    </Button>
+                  </Stack>
+                </Box>
+              </Dialog>
             </Box>
           </Box>
         </Box>
